@@ -43,8 +43,12 @@ class GameRepository {
     record GuessEntry(String word, String feedback) {
     }
 
-    /** What submit_guess.lua decided. {@code replay} means this guessId was already processed. */
-    record GuessCommit(String outcome, int attempt, int points, boolean roundEnded, long msBehind, boolean replay) {
+    /**
+     * What submit_guess.lua decided. {@code replay} means this guessId was already processed;
+     * {@code word} and {@code feedback} are what was committed (empty if the guess wasn't counted).
+     */
+    record GuessCommit(boolean replay, String outcome, int attempt, int points, boolean roundEnded,
+                       long msBehind, String word, String feedback) {
     }
 
     record Score(UUID userId, int points) {
@@ -138,7 +142,7 @@ class GameRepository {
                             long now, long resultsEndsAt, Duration idempotencyTtl) {
         List<String> keys = List.of(RoomKeys.room(code), RoomKeys.round(code), RoomKeys.players(code),
                 RoomKeys.guesses(code), RoomKeys.attempts(code), RoomKeys.leaderboard(code),
-                RoomKeys.idempotency(code, guessId));
+                RoomKeys.idempotency(code, userId, guessId));
         List<String> args = new ArrayList<>(List.of(
                 userId.toString(), roundId.toString(), word, feedback.toString(),
                 feedback.isSolved() ? "1" : "0", String.valueOf(now), String.valueOf(resultsEndsAt),
@@ -146,9 +150,9 @@ class GameRepository {
         for (int attempt = 1; attempt <= GameRules.MAX_ATTEMPTS; attempt++) {
             args.add(String.valueOf(Scoring.winnerPoints(attempt))); // Java stays the single source of scoring
         }
-        String[] parts = redis.execute(SUBMIT_GUESS, keys, args.toArray()).split("\\|");
-        return new GuessCommit(parts[0], parseInt(parts[1]), parseInt(parts[2]), "1".equals(parts[3]),
-                parseLong(parts[4]), "1".equals(parts[5]));
+        String[] parts = redis.execute(SUBMIT_GUESS, keys, args.toArray()).split("\\|", -1);
+        return new GuessCommit("1".equals(parts[0]), parts[1], parseInt(parts[2]), parseInt(parts[3]),
+                "1".equals(parts[4]), parseLong(parts[5]), parts[6], parts[7]);
     }
 
     /** This round's guesses per player, in order. */

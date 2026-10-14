@@ -122,14 +122,18 @@ public class GameService {
         if ("NOT_A_MEMBER".equals(commit.outcome())) {
             throw RoomException.notMember(code);
         }
+        if (commit.replay() && !commit.word().isEmpty() && !commit.word().equals(word)) {
+            // Same guessId, different word: not a retry. Answering would leak free feedback.
+            throw GameException.invalidGuess("guessId " + request.guessId() + " was already used for another word");
+        }
         GuessOutcome outcome = GuessOutcome.valueOf(commit.outcome());
-        GuessResult result = reply(caller, GuessResult.of(request, word, feedback, commit, outcome));
+        GuessResult result = reply(caller, GuessResult.of(request, word, commit, outcome));
 
         boolean counted = outcome == GuessOutcome.WON || outcome == GuessOutcome.WRONG;
         if (!counted || commit.replay()) {
             return result; // nothing changed for anyone else
         }
-        broadcaster.broadcast(code, new RoomEvent.PlayerProgress(caller.id(), commit.attempt(), feedback.toString()));
+        broadcaster.broadcast(code, new RoomEvent.PlayerProgress(caller.id(), commit.attempt(), commit.feedback()));
         if (commit.roundEnded()) {
             boolean won = outcome == GuessOutcome.WON;
             announceRoundEnd(code, round, won ? RoundEndReason.SOLVED : RoundEndReason.ALL_FAILED,

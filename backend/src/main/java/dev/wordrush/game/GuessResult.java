@@ -1,6 +1,5 @@
 package dev.wordrush.game;
 
-import dev.wordrush.core.Feedback;
 import java.util.UUID;
 
 /** Private reply to the guesser on /user/queue/guess-result. {@code feedback} is null when not counted. */
@@ -18,10 +17,11 @@ public record GuessResult(
         return new GuessResult(request.guessId(), request.roundId(), word, null, 0, outcome, 0, 0);
     }
 
-    static GuessResult of(GuessRequest request, String word, Feedback feedback,
-                          GameRepository.GuessCommit commit, GuessOutcome outcome) {
+    /** Built only from what was committed, so a replay can never reveal colours for a new word. */
+    static GuessResult of(GuessRequest request, String requestedWord, GameRepository.GuessCommit commit,
+                          GuessOutcome outcome) {
         boolean counted = outcome == GuessOutcome.WON || outcome == GuessOutcome.WRONG;
-        return new GuessResult(request.guessId(), request.roundId(), word,
-                counted ? feedback.toString() : null, commit.attempt(), outcome, commit.points(), commit.msBehind());
+        return new GuessResult(request.guessId(), request.roundId(), counted ? commit.word() : requestedWord,
+                counted ? commit.feedback() : null, commit.attempt(), outcome, commit.points(), commit.msBehind());
     }
 }

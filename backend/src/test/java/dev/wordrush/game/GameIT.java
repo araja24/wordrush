@@ -3,6 +3,7 @@ package dev.wordrush.game;
 import static dev.wordrush.StompTestClient.await;
 import static dev.wordrush.StompTestClient.ofType;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.InstanceOfAssertFactories.LIST;
 import static org.assertj.core.api.InstanceOfAssertFactories.MAP;
 
@@ -178,6 +179,33 @@ class GameIT extends IntegrationTest {
         assertThat(redis.opsForHash().get(RoomKeys.attempts(code), host.id().toString())).isEqualTo("1");
         await(host.room(), ofType("PLAYER_PROGRESS"));
         assertThat(host.room().poll(300, TimeUnit.MILLISECONDS)).as("no second PLAYER_PROGRESS").isNull();
+    }
+
+    /**
+     * Regression: replaying a guessId with a different word used to return colours computed for the
+     * new word without spending an attempt, i.e. unlimited free feedback (an answer oracle).
+     */
+    @Test
+    void replayingAGuessIdWithADifferentWordRevealsNothing() throws Exception {
+        AuthResponse hostAuth = signIn("cheater");
+        String code = createRoom(hostAuth, Map.of());
+        AuthenticatedUser cheater = new AuthenticatedUser(hostAuth.user().id(), "cheater", false);
+        gameService.start(cheater, code);
+        UUID roundId = awaitRound(code);
+        String answer = answer(code);
+        UUID guessId = UUID.randomUUID();
+
+        GuessResult honest = gameService.guess(cheater, code, new GuessRequest(guessId, roundId, wrongWord(answer)));
+        assertThat(honest.outcome()).isEqualTo(GuessOutcome.WRONG);
+
+        assertThatThrownBy(() -> gameService.guess(cheater, code, new GuessRequest(guessId, roundId, answer)))
+                .isInstanceOf(GameException.class)
+                .hasMessageContaining("already used");
+        assertThat(redis.opsForHash().get(RoomKeys.attempts(code), cheater.id().toString())).isEqualTo("1");
+        assertThat(redis.opsForHash().get(RoomKeys.round(code), "winnerId")).isNull();
+
+        GuessResult retry = gameService.guess(cheater, code, new GuessRequest(guessId, roundId, wrongWord(answer)));
+        assertThat(retry).isEqualTo(honest); // a genuine retry still gets the original result
     }
 
     @Test

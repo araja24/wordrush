@@ -15,7 +15,7 @@ import java.util.UUID;
  * wr:room:{CODE}:attempts    HASH   userId -> guesses used this round
  * wr:room:{CODE}:lb          ZSET   userId -> points this game
  * wr:room:{CODE}:used        SET    answers already used this game
- * wr:room:{CODE}:idem:{id}   STRING cached result of guess {id} (idempotency)
+ * wr:room:{CODE}:idem:{user}:{id}  STRING cached result of that user's guess {id} (idempotency)
  * wr:user:{userId}:room      STRING the room this user is in
  * wr:timers                  ZSET   "CODE|TYPE|token" -> due epoch ms (all rooms)
  * </pre>
@@ -55,8 +55,9 @@ public final class RoomKeys {
         return room(code) + ":used";
     }
 
-    public static String idempotency(String code, UUID guessId) {
-        return room(code) + ":idem:" + guessId;
+    /** Scoped per user, so one player's guessId can never return another player's result. */
+    public static String idempotency(String code, UUID userId, UUID guessId) {
+        return room(code) + ":idem:" + userId + ":" + guessId;
     }
 
     public static String userRoom(UUID userId) {

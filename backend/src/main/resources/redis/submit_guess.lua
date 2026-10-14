@@ -2,13 +2,17 @@
 -- Redis runs one script at a time, so of two correct guesses arriving in the same millisecond
 -- (even from different app instances) exactly one sees status IN_ROUND and wins.
 --
--- KEYS: 1 room, 2 round, 3 players, 4 guesses, 5 attempts, 6 leaderboard, 7 idempotency key
+-- KEYS: 1 room, 2 round, 3 players, 4 guesses, 5 attempts, 6 leaderboard,
+--       7 idempotency key (scoped to this user and guessId)
 -- ARGV: 1 userId, 2 roundId, 3 word, 4 feedback, 5 correct ('1'|'0'), 6 now (epoch ms),
 --       7 resultsEndsAt, 8 idempotency ttl seconds, 9 max attempts, 10..15 points for winning on attempt 1..6
--- Returns "OUTCOME|attempt|points|roundEnded|msBehind|replay"
+-- Returns "replay|OUTCOME|attempt|points|roundEnded|msBehind|word|feedback"
+--   word/feedback are the COMMITTED values, empty when the guess was not counted.
+--   On a replay they come from the cache, never from this request: otherwise resending an old
+--   guessId with new words would reveal their colours without spending attempts (an answer oracle).
 local cached = redis.call('GET', KEYS[7])
 if cached then
-  return cached .. '|1' -- a retry of a guess we already processed: same answer, no new attempt
+  return '1|' .. cached
 end
 
 local status = redis.call('HGET', KEYS[1], 'status')
@@ -17,20 +21,20 @@ if status ~= 'IN_ROUND' or roundId ~= ARGV[2] then
   if roundId == ARGV[2] and ARGV[5] == '1' and redis.call('HGET', KEYS[2], 'endReason') == 'SOLVED' then
     -- Correct, but someone else's correct guess committed first. Report how close it was.
     local behind = tonumber(ARGV[6]) - tonumber(redis.call('HGET', KEYS[2], 'winnerAt'))
-    return 'CORRECT_LATE|0|0|0|' .. math.max(behind, 0) .. '|0'
+    return '0|CORRECT_LATE|0|0|0|' .. math.max(behind, 0) .. '||'
   end
-  return 'ROUND_OVER|0|0|0|0|0'
+  return '0|ROUND_OVER|0|0|0|0||'
 end
 if tonumber(ARGV[6]) > tonumber(redis.call('HGET', KEYS[2], 'endsAt')) then
-  return 'ROUND_OVER|0|0|0|0|0' -- past the deadline; the round timer is about to end it
+  return '0|ROUND_OVER|0|0|0|0||' -- past the deadline; the round timer is about to end it
 end
 if redis.call('HEXISTS', KEYS[3], ARGV[1]) == 0 then
-  return 'NOT_A_MEMBER|0|0|0|0|0'
+  return '0|NOT_A_MEMBER|0|0|0|0||'
 end
 local max = tonumber(ARGV[9])
 local used = tonumber(redis.call('HGET', KEYS[5], ARGV[1]) or '0')
 if used >= max then
-  return 'OUT_OF_GUESSES|' .. used .. '|0|0|0|0'
+  return '0|OUT_OF_GUESSES|' .. used .. '|0|0|0||'
 end
 
 local attempt = redis.call('HINCRBY', KEYS[5], ARGV[1], 1)
@@ -65,5 +69,6 @@ else
   end
   result = 'WRONG|' .. attempt .. '|0|' .. roundEnded .. '|0'
 end
+result = result .. '|' .. ARGV[3] .. '|' .. ARGV[4]
 redis.call('SET', KEYS[7], result, 'EX', ARGV[8])
-return result .. '|0'
+return '0|' .. result
