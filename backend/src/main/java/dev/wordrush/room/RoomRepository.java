@@ -85,6 +85,10 @@ public class RoomRepository {
                 Long.parseLong(fields.get("seq"))));
     }
 
+    public boolean isMember(String code, UUID userId) {
+        return hashes.hasKey(RoomKeys.players(code), userId.toString());
+    }
+
     JoinOutcome join(String code, Player player, Duration ttl) {
         String result = redis.execute(JOIN, membershipKeys(code),
                 player.userId().toString(), json.writeValueAsString(player), seconds(ttl));

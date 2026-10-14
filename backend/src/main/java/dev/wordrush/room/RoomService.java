@@ -8,7 +8,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -57,7 +56,7 @@ public class RoomService {
     }
 
     public RoomSnapshot join(AuthenticatedUser caller, String rawCode) {
-        String code = normalize(rawCode);
+        String code = RoomCodeGenerator.normalize(rawCode);
         rooms.currentRoom(caller.id())
                 .filter(current -> !current.equals(code))
                 .ifPresent(current -> leaveQuietly(caller.id(), current));
@@ -77,7 +76,7 @@ public class RoomService {
     }
 
     public void leave(AuthenticatedUser caller, String rawCode) {
-        String code = normalize(rawCode);
+        String code = RoomCodeGenerator.normalize(rawCode);
         RoomRepository.LeaveOutcome outcome = rooms.leave(code, caller.id());
         switch (outcome.kind()) {
             case NOT_FOUND -> throw RoomException.notFound(code);
@@ -88,7 +87,7 @@ public class RoomService {
     }
 
     public void kick(AuthenticatedUser caller, String rawCode, UUID target) {
-        String code = normalize(rawCode);
+        String code = RoomCodeGenerator.normalize(rawCode);
         Room room = rooms.find(code).orElseThrow(() -> RoomException.notFound(code));
         if (!room.isHost(caller.id())) {
             throw RoomException.notHost(code);
@@ -103,13 +102,14 @@ public class RoomService {
             default -> {
                 log.info("Player kicked room={} user={} by={}", code, target, caller.id());
                 afterLeave(code, target, outcome, true);
+                broadcaster.sendToUser(target, "/queue/kicked", new KickedNotice(code));
             }
         }
         rooms.clearCurrentRoom(target, code);
     }
 
     public RoomSnapshot get(AuthenticatedUser caller, String rawCode) {
-        String code = normalize(rawCode);
+        String code = RoomCodeGenerator.normalize(rawCode);
         Room room = rooms.find(code).orElseThrow(() -> RoomException.notFound(code));
         if (!room.isMember(caller.id())) {
             throw RoomException.notMember(code);
@@ -160,14 +160,5 @@ public class RoomService {
             }
             case NOT_FOUND, NOT_MEMBER -> log.debug("Stale room pointer room={} user={}", code, userId);
         }
-    }
-
-    /** Codes are case-insensitive for humans; anything malformed simply doesn't exist. */
-    private static String normalize(String rawCode) {
-        String code = rawCode == null ? "" : rawCode.strip().toUpperCase(Locale.ROOT);
-        if (!RoomCodeGenerator.isValid(code)) {
-            throw RoomException.notFound(code);
-        }
-        return code;
     }
 }

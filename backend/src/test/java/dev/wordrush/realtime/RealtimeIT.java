@@ -92,12 +92,14 @@ class RealtimeIT extends IntegrationTest {
              StompTestClient victimClient = StompTestClient.connect(port, victim.accessToken())) {
             BlockingQueue<Map<String, Object>> hostRoom = hostClient.subscribe("/topic/rooms/" + code);
             BlockingQueue<Map<String, Object>> victimRoom = victimClient.subscribe("/topic/rooms/" + code);
+            BlockingQueue<Map<String, Object>> victimKicked = victimClient.subscribe("/user/queue/kicked");
             TimeUnit.MILLISECONDS.sleep(200);
 
             http(host.accessToken()).delete().uri("/api/v1/rooms/{code}/players/{id}", code, victim.user().id())
                     .retrieve().toBodilessEntity();
-            assertThat(await(victimRoom, ofType("PLAYER_LEFT")).get("payload")).asInstanceOf(MAP)
+            assertThat(await(hostRoom, ofType("PLAYER_LEFT")).get("payload")).asInstanceOf(MAP)
                     .containsEntry("kicked", true);
+            assertThat(await(victimKicked, message -> true)).containsEntry("roomCode", code);
 
             join(signIn("newcomer"), code);
             await(hostRoom, ofType("PLAYER_JOINED"));

@@ -1,6 +1,7 @@
 package dev.wordrush.room;
 
 import java.security.SecureRandom;
+import java.util.Locale;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 
@@ -27,5 +28,14 @@ public class RoomCodeGenerator {
 
     public static boolean isValid(String code) {
         return code != null && VALID.matcher(code).matches();
+    }
+
+    /** Codes are case-insensitive for humans; anything malformed simply doesn't exist. */
+    public static String normalize(String rawCode) {
+        String code = rawCode == null ? "" : rawCode.strip().toUpperCase(Locale.ROOT);
+        if (!isValid(code)) {
+            throw RoomException.notFound(code);
+        }
+        return code;
     }
 }

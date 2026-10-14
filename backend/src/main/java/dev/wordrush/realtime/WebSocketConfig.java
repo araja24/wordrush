@@ -28,11 +28,14 @@ class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private static final long HEARTBEAT_MILLIS = 10_000;
 
     private final StompAuthChannelInterceptor authInterceptor;
+    private final RoomTopicDeliveryFilter deliveryFilter;
     private final WordRushProperties properties;
     private TaskScheduler heartbeatScheduler;
 
-    WebSocketConfig(StompAuthChannelInterceptor authInterceptor, WordRushProperties properties) {
+    WebSocketConfig(StompAuthChannelInterceptor authInterceptor, RoomTopicDeliveryFilter deliveryFilter,
+                    WordRushProperties properties) {
         this.authInterceptor = authInterceptor;
+        this.deliveryFilter = deliveryFilter;
         this.properties = properties;
     }
 
@@ -61,5 +64,10 @@ class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
         registration.interceptors(authInterceptor);
+    }
+
+    @Override
+    public void configureClientOutboundChannel(ChannelRegistration registration) {
+        registration.interceptors(deliveryFilter);
     }
 }

@@ -42,10 +42,12 @@ class StompAuthChannelInterceptor implements ChannelInterceptor {
 
     private final JwtDecoder jwtDecoder;
     private final RoomRepository rooms;
+    private final StompSessions sessions;
 
-    StompAuthChannelInterceptor(JwtDecoder jwtDecoder, RoomRepository rooms) {
+    StompAuthChannelInterceptor(JwtDecoder jwtDecoder, RoomRepository rooms, StompSessions sessions) {
         this.jwtDecoder = jwtDecoder;
         this.rooms = rooms;
+        this.sessions = sessions;
     }
 
     @Override
@@ -56,7 +58,12 @@ class StompAuthChannelInterceptor implements ChannelInterceptor {
         }
         switch (accessor.getCommand()) {
             // STOMP is the spec's alias for CONNECT; both must authenticate.
-            case CONNECT, STOMP -> accessor.setUser(authenticate(accessor.getFirstNativeHeader("Authorization")));
+            case CONNECT, STOMP -> {
+                Authentication auth = authenticate(accessor.getFirstNativeHeader("Authorization"));
+                accessor.setUser(auth);
+                sessions.register(accessor.getSessionId(), ((AuthenticatedUser) auth.getPrincipal()).id());
+            }
+            case DISCONNECT -> sessions.remove(accessor.getSessionId()); // also sent when a socket just drops
             case SUBSCRIBE -> authorizeSubscribe(user(accessor), accessor.getDestination());
             case SEND -> authorizeSend(user(accessor), accessor.getDestination());
             default -> {
@@ -104,8 +111,7 @@ class StompAuthChannelInterceptor implements ChannelInterceptor {
     }
 
     private void requireMember(AuthenticatedUser user, String code) {
-        boolean member = rooms.find(code).map(room -> room.isMember(user.id())).orElse(false);
-        if (!member) {
+        if (!rooms.isMember(code, user.id())) {
             throw new AccessDeniedException("Not a member of room " + code);
         }
     }
