@@ -1,3 +1,3 @@
 rootProject.name = "wordrush"
 
-include("backend")
+include("game-core", "backend")
