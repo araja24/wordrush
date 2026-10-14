@@ -28,7 +28,8 @@ import org.springframework.stereotype.Component;
  * at /ws is public and the JWT travels in the STOMP CONNECT frame instead. Once CONNECT sets the
  * user, Spring attaches it to every later frame of that session.
  *
- * <p>Authorization is per destination: you may only subscribe to rooms you're in, and you may
+ * <p>Authorization is per destination: you may only subscribe to rooms you're in (and lose the
+ * subscription when you leave, see {@link StompRoomBroadcaster#revokeRoomAccess}), and you may
  * only SEND to /app. The second rule matters: with a simple broker, a SEND to /topic/rooms/X
  * would otherwise be relayed to the whole room as a forged event.
  */
@@ -54,7 +55,8 @@ class StompAuthChannelInterceptor implements ChannelInterceptor {
             return message;
         }
         switch (accessor.getCommand()) {
-            case CONNECT -> accessor.setUser(authenticate(accessor.getFirstNativeHeader("Authorization")));
+            // STOMP is the spec's alias for CONNECT; both must authenticate.
+            case CONNECT, STOMP -> accessor.setUser(authenticate(accessor.getFirstNativeHeader("Authorization")));
             case SUBSCRIBE -> authorizeSubscribe(user(accessor), accessor.getDestination());
             case SEND -> authorizeSend(user(accessor), accessor.getDestination());
             default -> {

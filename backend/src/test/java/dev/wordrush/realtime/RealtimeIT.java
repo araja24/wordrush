@@ -12,8 +12,13 @@ import dev.wordrush.auth.AuthResponse;
 import dev.wordrush.room.RoomSnapshot;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.socket.TextMessage;
+import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.client.standard.StandardWebSocketClient;
+import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 class RealtimeIT extends IntegrationTest {
 
@@ -73,6 +78,51 @@ class RealtimeIT extends IntegrationTest {
 
             assertThat(await(room, ofType("HOST_CHANGED")).get("payload")).asInstanceOf(MAP)
                     .containsEntry("hostId", guest.user().id().toString());
+        }
+    }
+
+    @Test
+    void kickedPlayerStopsReceivingRoomEvents() throws Exception {
+        AuthResponse host = signIn("host");
+        AuthResponse victim = signIn("victim");
+        String code = createRoom(host);
+        join(victim, code);
+
+        try (StompTestClient hostClient = StompTestClient.connect(port, host.accessToken());
+             StompTestClient victimClient = StompTestClient.connect(port, victim.accessToken())) {
+            BlockingQueue<Map<String, Object>> hostRoom = hostClient.subscribe("/topic/rooms/" + code);
+            BlockingQueue<Map<String, Object>> victimRoom = victimClient.subscribe("/topic/rooms/" + code);
+            TimeUnit.MILLISECONDS.sleep(200);
+
+            http(host.accessToken()).delete().uri("/api/v1/rooms/{code}/players/{id}", code, victim.user().id())
+                    .retrieve().toBodilessEntity();
+            assertThat(await(victimRoom, ofType("PLAYER_LEFT")).get("payload")).asInstanceOf(MAP)
+                    .containsEntry("kicked", true);
+
+            join(signIn("newcomer"), code);
+            await(hostRoom, ofType("PLAYER_JOINED"));
+            assertThat(victimRoom.poll(500, TimeUnit.MILLISECONDS)).as("ex-member still receiving").isNull();
+        }
+    }
+
+    /** STOMP's "STOMP" command is an alias for CONNECT and must be authenticated the same way. */
+    @Test
+    void stompAliasFrameWithoutTokenIsRefused() throws Exception {
+        BlockingQueue<String> frames = new LinkedBlockingQueue<>();
+        WebSocketSession raw = new StandardWebSocketClient().execute(new TextWebSocketHandler() {
+            @Override
+            protected void handleTextMessage(WebSocketSession session, TextMessage message) {
+                frames.add(message.getPayload());
+            }
+        }, "ws://localhost:" + port + "/ws").get(5, TimeUnit.SECONDS);
+        try {
+            raw.sendMessage(new TextMessage("STOMP\naccept-version:1.2\nhost:localhost\n\n\0"));
+
+            assertThat(frames.poll(5, TimeUnit.SECONDS)).startsWith("ERROR");
+        } finally {
+            if (raw.isOpen()) {
+                raw.close();
+            }
         }
     }
 

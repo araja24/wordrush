@@ -146,13 +146,18 @@ public class RoomService {
             case LEFT -> {
                 log.info("Player left room={} user={}", code, userId);
                 broadcaster.broadcast(code, new RoomEvent.PlayerLeft(userId, kicked));
+                broadcaster.revokeRoomAccess(code, userId);
             }
             case HOST_CHANGED -> {
                 log.info("Player left room={} user={} newHost={}", code, userId, outcome.newHostId());
                 broadcaster.broadcast(code, new RoomEvent.PlayerLeft(userId, kicked));
                 broadcaster.broadcast(code, new RoomEvent.HostChanged(outcome.newHostId()));
+                broadcaster.revokeRoomAccess(code, userId);
             }
-            case ROOM_CLOSED -> log.info("Player left room={} user={}; room closed", code, userId);
+            case ROOM_CLOSED -> {
+                log.info("Player left room={} user={}; room closed", code, userId);
+                broadcaster.revokeRoomAccess(code, userId);
+            }
             case NOT_FOUND, NOT_MEMBER -> log.debug("Stale room pointer room={} user={}", code, userId);
         }
     }

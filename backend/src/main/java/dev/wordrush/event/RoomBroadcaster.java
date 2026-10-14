@@ -14,4 +14,10 @@ public interface RoomBroadcaster {
 
     /** Sends a private message to one user, e.g. destination "/queue/guess-result". */
     void sendToUser(UUID userId, String destination, Object payload);
+
+    /**
+     * Stops a user who left or was kicked from receiving the room's broadcasts. Membership is
+     * checked when they subscribe, so without this an ex-member's subscription would live on.
+     */
+    void revokeRoomAccess(String roomCode, UUID userId);
 }
