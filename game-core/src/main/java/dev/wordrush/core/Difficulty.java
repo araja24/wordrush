@@ -2,7 +2,7 @@ package dev.wordrush.core;
 
 /** How a bot picks its next guess. Think-time delays live in the bot runtime, not here. */
 public enum Difficulty {
-    /** Usually a word that fits the clues, but sometimes a random word. */
+    /** Often (40% of guesses) ignores the clues and tries a random word. */
     EASY,
     /** A random word that fits every clue so far. */
     MEDIUM,

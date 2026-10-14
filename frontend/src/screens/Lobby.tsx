@@ -58,9 +58,9 @@ export function Lobby() {
             <label className="field">
               <span>Bot difficulty</span>
               <select value={difficulty} onChange={(e) => setDifficulty(e.target.value as Difficulty)}>
-                <option value="EASY">Easy: slow, sometimes guesses blind</option>
-                <option value="MEDIUM">Medium: steady, always uses the clues</option>
-                <option value="HARD">Hard: fast, solves in about 3.5 guesses</option>
+                <option value="EASY">Easy: slow, often guesses blind</option>
+                <option value="MEDIUM">Medium: about a minute per word</option>
+                <option value="HARD">Hard: about 30 seconds per word</option>
               </select>
             </label>
             <button type="button" className="button" disabled={full} onClick={() => void addBot(difficulty)}>

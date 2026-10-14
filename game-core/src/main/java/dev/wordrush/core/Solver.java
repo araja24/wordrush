@@ -9,7 +9,7 @@ import java.util.random.RandomGenerator;
  */
 public final class Solver {
 
-    static final double EASY_RANDOM_GUESS_RATE = 0.2;
+    static final double EASY_RANDOM_GUESS_RATE = 0.4;
 
     private final FeedbackTable table;
     private final Difficulty difficulty;
