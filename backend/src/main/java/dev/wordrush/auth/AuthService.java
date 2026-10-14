@@ -1,0 +1,50 @@
+package dev.wordrush.auth;
+
+import dev.wordrush.user.User;
+import dev.wordrush.user.UserRepository;
+import java.util.concurrent.ThreadLocalRandom;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+
+@Service
+public class AuthService {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
+    private static final int MAX_USERNAME_ATTEMPTS = 10;
+
+    private final UserRepository users;
+    private final TokenService tokens;
+
+    public AuthService(UserRepository users, TokenService tokens) {
+        this.users = users;
+        this.tokens = tokens;
+    }
+
+    public AuthResponse loginAsGuest(String nickname) {
+        User user = createWithFreeUsername(nickname);
+        log.info("Guest created userId={} username={}", user.id(), user.username());
+        return AuthResponse.of(tokens.issue(user), user);
+    }
+
+    /**
+     * Picks a random {@code #0000-#9999} suffix. The pre-check makes collisions rare; the unique
+     * constraint is the real guarantee if two requests race for the same name.
+     */
+    private User createWithFreeUsername(String nickname) {
+        for (int attempt = 0; attempt < MAX_USERNAME_ATTEMPTS; attempt++) {
+            int discriminator = ThreadLocalRandom.current().nextInt(10_000);
+            User candidate = User.guest(nickname, discriminator);
+            if (users.existsByUsername(candidate.username())) {
+                continue;
+            }
+            try {
+                return users.saveAndFlush(candidate);
+            } catch (DataIntegrityViolationException raceLost) {
+                log.debug("Username {} taken concurrently, retrying", candidate.username());
+            }
+        }
+        throw new IllegalStateException("Could not find a free username for " + nickname);
+    }
+}

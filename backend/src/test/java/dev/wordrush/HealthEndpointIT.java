@@ -4,30 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.web.client.RestClient;
 
 /** Stage 0 "done" check: app boots, Flyway migrates, and health reports db + redis UP. */
-@Import(TestcontainersConfiguration.class)
-@ActiveProfiles("dev")
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class HealthEndpointIT {
-
-    @LocalServerPort
-    int port;
+class HealthEndpointIT extends IntegrationTest {
 
     @Autowired
     JdbcTemplate jdbc;
 
     @Test
     void readinessIsUpWithDbAndRedis() {
-        String body = RestClient.create("http://localhost:" + port)
-                .get().uri("/actuator/health/readiness")
-                .retrieve().body(String.class);
+        String body = http().get().uri("/actuator/health/readiness").retrieve().body(String.class);
 
         assertThat(body).contains("\"status\":\"UP\"").contains("\"db\"").contains("\"redis\"");
     }

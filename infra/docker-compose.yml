@@ -39,6 +39,7 @@ services:
       DATABASE_PASSWORD: wordrush
       REDIS_URL: redis://redis:6379
       LOG_FORMAT: logstash
+      JWT_SECRET: ${JWT_SECRET:-compose-local-secret-not-for-production-0123456789}
     ports:
       - "8080:8080"
     depends_on:

@@ -3,3 +3,7 @@ management:
   endpoint:
     health:
       show-details: always
+
+wordrush:
+  jwt:
+    secret: dev-only-secret-do-not-use-in-production-0123456789

@@ -42,3 +42,17 @@ logging:
   structured:
     format:
       console: ${LOG_FORMAT:} # set LOG_FORMAT=logstash in Docker/Render for JSON logs
+
+wordrush:
+  jwt:
+    secret: ${JWT_SECRET} # no default: the app refuses to start without a real secret
+    ttl: 12h
+    issuer: wordrush
+  cors:
+    allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5173}
+  room:
+    ttl: 2h
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html

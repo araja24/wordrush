@@ -10,11 +10,13 @@ Requires JDK 21 and Docker.
 # Postgres + Redis
 docker compose -f infra/docker-compose.yml up -d --wait
 
-# Backend on :8080 (Flyway migrates on startup)
+# Backend on :8080 with the dev profile (Flyway migrates on startup)
 ./gradlew :backend:bootRun
 
 curl localhost:8080/actuator/health/readiness
 ```
+
+API docs: http://localhost:8080/swagger-ui.html. Call `POST /api/v1/auth/guest`, then **Authorize** with the returned `accessToken`.
 
 Everything in containers instead: `docker compose -f infra/docker-compose.yml --profile app up --build`
 
@@ -33,4 +35,6 @@ Everything in containers instead: `docker compose -f infra/docker-compose.yml --
 | `DATABASE_USERNAME` / `DATABASE_PASSWORD` | `wordrush` / `wordrush` |
 | `REDIS_URL` | `redis://localhost:6379` |
 | `LOG_FORMAT` | empty (plain text); `logstash` for JSON |
+| `JWT_SECRET` | **required** outside the dev profile (32+ chars); the app refuses to start without it |
+| `ALLOWED_ORIGINS` | `http://localhost:5173` (comma-separated browser origins for CORS) |
 | `HEALTH_SHOW_DETAILS` | `never` (the `dev` profile, used by `bootRun` and tests, shows details) |
