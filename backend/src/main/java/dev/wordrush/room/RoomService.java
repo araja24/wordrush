@@ -2,6 +2,8 @@ package dev.wordrush.room;
 
 import dev.wordrush.auth.AuthenticatedUser;
 import dev.wordrush.config.WordRushProperties;
+import dev.wordrush.event.RoomBroadcaster;
+import dev.wordrush.event.RoomEvent;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -26,12 +28,15 @@ public class RoomService {
 
     private final RoomRepository rooms;
     private final RoomCodeGenerator codes;
+    private final RoomBroadcaster broadcaster;
     private final Clock clock;
     private final Duration ttl;
 
-    public RoomService(RoomRepository rooms, RoomCodeGenerator codes, Clock clock, WordRushProperties properties) {
+    public RoomService(RoomRepository rooms, RoomCodeGenerator codes, RoomBroadcaster broadcaster, Clock clock,
+                       WordRushProperties properties) {
         this.rooms = rooms;
         this.codes = codes;
+        this.broadcaster = broadcaster;
         this.clock = clock;
         this.ttl = properties.room().ttl();
     }
@@ -61,7 +66,10 @@ public class RoomService {
             case NOT_FOUND -> throw RoomException.notFound(code);
             case FULL -> throw RoomException.full(code);
             case NOT_JOINABLE -> throw RoomException.gameInProgress(code);
-            case JOINED -> log.info("Player joined room={} user={}", code, caller.id());
+            case JOINED -> {
+                log.info("Player joined room={} user={}", code, caller.id());
+                broadcaster.broadcast(code, new RoomEvent.PlayerJoined(caller.id(), caller.nickname(), caller.bot()));
+            }
             case ALREADY_MEMBER -> log.debug("Player rejoined room={} user={}", code, caller.id());
         }
         rooms.setCurrentRoom(caller.id(), code, ttl);
@@ -74,7 +82,7 @@ public class RoomService {
         switch (outcome.kind()) {
             case NOT_FOUND -> throw RoomException.notFound(code);
             case NOT_MEMBER -> throw RoomException.notMember(code);
-            default -> logLeave(code, caller.id(), outcome);
+            default -> afterLeave(code, caller.id(), outcome, false);
         }
         rooms.clearCurrentRoom(caller.id(), code);
     }
@@ -92,7 +100,10 @@ public class RoomService {
         switch (outcome.kind()) {
             case NOT_FOUND -> throw RoomException.notFound(code);
             case NOT_MEMBER -> throw RoomException.playerNotFound(code, target);
-            default -> log.info("Player kicked room={} user={} by={}", code, target, caller.id());
+            default -> {
+                log.info("Player kicked room={} user={} by={}", code, target, caller.id());
+                afterLeave(code, target, outcome, true);
+            }
         }
         rooms.clearCurrentRoom(target, code);
     }
@@ -126,15 +137,22 @@ public class RoomService {
     /** Leaving a room that already vanished is fine when we're only cleaning up. */
     private void leaveQuietly(UUID userId, String code) {
         RoomRepository.LeaveOutcome outcome = rooms.leave(code, userId);
-        logLeave(code, userId, outcome);
+        afterLeave(code, userId, outcome, false);
         rooms.clearCurrentRoom(userId, code);
     }
 
-    private static void logLeave(String code, UUID userId, RoomRepository.LeaveOutcome outcome) {
+    private void afterLeave(String code, UUID userId, RoomRepository.LeaveOutcome outcome, boolean kicked) {
         switch (outcome.kind()) {
-            case HOST_CHANGED -> log.info("Player left room={} user={} newHost={}", code, userId, outcome.newHostId());
+            case LEFT -> {
+                log.info("Player left room={} user={}", code, userId);
+                broadcaster.broadcast(code, new RoomEvent.PlayerLeft(userId, kicked));
+            }
+            case HOST_CHANGED -> {
+                log.info("Player left room={} user={} newHost={}", code, userId, outcome.newHostId());
+                broadcaster.broadcast(code, new RoomEvent.PlayerLeft(userId, kicked));
+                broadcaster.broadcast(code, new RoomEvent.HostChanged(outcome.newHostId()));
+            }
             case ROOM_CLOSED -> log.info("Player left room={} user={}; room closed", code, userId);
-            case LEFT -> log.info("Player left room={} user={}", code, userId);
             case NOT_FOUND, NOT_MEMBER -> log.debug("Stale room pointer room={} user={}", code, userId);
         }
     }

@@ -16,7 +16,6 @@ if redis.call('HLEN', KEYS[2]) >= tonumber(redis.call('HGET', KEYS[1], 'maxPlaye
   return 'FULL'
 end
 redis.call('HSET', KEYS[2], ARGV[1], ARGV[2])
-redis.call('HINCRBY', KEYS[1], 'seq', 1)
 redis.call('EXPIRE', KEYS[1], ARGV[3])
 redis.call('EXPIRE', KEYS[2], ARGV[3])
 return 'JOINED'

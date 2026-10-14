@@ -15,16 +15,7 @@ import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Repository;
 import tools.jackson.databind.json.JsonMapper;
 
-/**
- * Live room state in Redis. Every key for one room shares the hash tag {CODE}, so in Redis
- * Cluster they land on the same slot and a Lua script may touch them together.
- *
- * <pre>
- * wr:room:{CODE}          HASH   status, hostId, totalRounds, roundSeconds, maxPlayers, createdAt, seq
- * wr:room:{CODE}:players  HASH   userId -> Player JSON
- * wr:user:{userId}:room   STRING the room this user is in (for reconnect)
- * </pre>
- */
+/** Room membership state in Redis. Key layout: {@link RoomKeys}. */
 @Repository
 public class RoomRepository {
 
@@ -40,6 +31,8 @@ public class RoomRepository {
             RedisScript.of(new ClassPathResource("redis/join_room.lua"), String.class);
     private static final RedisScript<String> LEAVE =
             RedisScript.of(new ClassPathResource("redis/leave_room.lua"), String.class);
+    private static final RedisScript<Long> NEXT_SEQ =
+            RedisScript.of(new ClassPathResource("redis/next_seq.lua"), Long.class);
     private static final String HOST_CHANGED_PREFIX = "HOST_CHANGED:";
 
     private final StringRedisTemplate redis;
@@ -50,18 +43,6 @@ public class RoomRepository {
         this.redis = redis;
         this.hashes = redis.opsForHash();
         this.json = json;
-    }
-
-    static String roomKey(String code) {
-        return "wr:room:{" + code + "}";
-    }
-
-    static String playersKey(String code) {
-        return roomKey(code) + ":players";
-    }
-
-    static String userRoomKey(UUID userId) {
-        return "wr:user:" + userId + ":room";
     }
 
     /** Returns false if the code is already in use. The room's first player must be the host. */
@@ -76,17 +57,18 @@ public class RoomRepository {
                 "roundSeconds", String.valueOf(settings.roundSeconds()),
                 "maxPlayers", String.valueOf(settings.maxPlayers()),
                 "createdAt", String.valueOf(room.createdAt().toEpochMilli()),
-                "seq", String.valueOf(room.seq())));
-        Long created = redis.execute(CREATE, keys(room.code()), args.toArray());
+                "seq", String.valueOf(room.seq()),
+                "roundNo", "0"));
+        Long created = redis.execute(CREATE, membershipKeys(room.code()), args.toArray());
         return created != null && created == 1L;
     }
 
-    Optional<Room> find(String code) {
-        Map<String, String> fields = hashes.entries(roomKey(code));
+    public Optional<Room> find(String code) {
+        Map<String, String> fields = hashes.entries(RoomKeys.room(code));
         if (fields.isEmpty()) {
             return Optional.empty();
         }
-        List<Player> players = hashes.entries(playersKey(code)).values().stream()
+        List<Player> players = hashes.entries(RoomKeys.players(code)).values().stream()
                 .map(value -> json.readValue(value, Player.class))
                 .sorted(Comparator.comparingLong(Player::joinedAt))
                 .toList();
@@ -104,13 +86,13 @@ public class RoomRepository {
     }
 
     JoinOutcome join(String code, Player player, Duration ttl) {
-        String result = redis.execute(JOIN, keys(code),
+        String result = redis.execute(JOIN, membershipKeys(code),
                 player.userId().toString(), json.writeValueAsString(player), seconds(ttl));
         return JoinOutcome.valueOf(result);
     }
 
     LeaveOutcome leave(String code, UUID userId) {
-        String result = redis.execute(LEAVE, keys(code), userId.toString());
+        String result = redis.execute(LEAVE, RoomKeys.allForRoom(code), userId.toString());
         if (result.startsWith(HOST_CHANGED_PREFIX)) {
             UUID newHost = UUID.fromString(result.substring(HOST_CHANGED_PREFIX.length()));
             return new LeaveOutcome(LeaveOutcome.Kind.HOST_CHANGED, newHost);
@@ -118,23 +100,29 @@ public class RoomRepository {
         return new LeaveOutcome(LeaveOutcome.Kind.valueOf(result), null);
     }
 
+    /** Next broadcast sequence number, or -1 if the room is gone. */
+    public long nextSeq(String code) {
+        Long seq = redis.execute(NEXT_SEQ, List.of(RoomKeys.room(code)));
+        return seq == null ? -1 : seq;
+    }
+
     void setCurrentRoom(UUID userId, String code, Duration ttl) {
-        redis.opsForValue().set(userRoomKey(userId), code, ttl);
+        redis.opsForValue().set(RoomKeys.userRoom(userId), code, ttl);
     }
 
     Optional<String> currentRoom(UUID userId) {
-        return Optional.ofNullable(redis.opsForValue().get(userRoomKey(userId)));
+        return Optional.ofNullable(redis.opsForValue().get(RoomKeys.userRoom(userId)));
     }
 
     /** Clears the pointer only if it still points at {@code code} (the user may have moved on). */
     void clearCurrentRoom(UUID userId, String code) {
-        if (code.equals(redis.opsForValue().get(userRoomKey(userId)))) {
-            redis.delete(userRoomKey(userId));
+        if (code.equals(redis.opsForValue().get(RoomKeys.userRoom(userId)))) {
+            redis.delete(RoomKeys.userRoom(userId));
         }
     }
 
-    private static List<String> keys(String code) {
-        return List.of(roomKey(code), playersKey(code));
+    private static List<String> membershipKeys(String code) {
+        return List.of(RoomKeys.room(code), RoomKeys.players(code));
     }
 
     private static String seconds(Duration ttl) {

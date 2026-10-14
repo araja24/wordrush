@@ -87,7 +87,7 @@ class RoomIT extends IntegrationTest {
     void cannotJoinAGameInProgress() {
         AuthResponse host = signIn("host");
         String code = createRoom(host, Map.of()).code();
-        redis.opsForHash().put(RoomRepository.roomKey(code), "status", RoomStatus.IN_ROUND.name());
+        redis.opsForHash().put(RoomKeys.room(code), "status", RoomStatus.IN_ROUND.name());
 
         ResponseEntity<Map<String, Object>> late = join(signIn("late"), code);
 
@@ -120,7 +120,7 @@ class RoomIT extends IntegrationTest {
         http(second.accessToken()).post().uri("/api/v1/rooms/{code}/leave", code).retrieve().toBodilessEntity();
         http(third.accessToken()).post().uri("/api/v1/rooms/{code}/leave", code).retrieve().toBodilessEntity();
         assertThat(get(third, code).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(redis.hasKey(RoomRepository.playersKey(code))).isFalse();
+        assertThat(redis.hasKey(RoomKeys.players(code))).isFalse();
     }
 
     @Test

@@ -52,6 +52,7 @@ class SecurityConfig {
                         .requestMatchers("/actuator/**").denyAll() // metrics stay private (Stage 8)
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/error").permitAll()
+                        .requestMatchers("/ws", "/ws/**").permitAll() // JWT checked on STOMP CONNECT
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(toAuthenticatedUser()))

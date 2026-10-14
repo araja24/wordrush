@@ -1,5 +1,5 @@
 -- Atomically remove a player, migrating host or closing the room as needed.
--- KEYS[1] room hash, KEYS[2] players hash
+-- KEYS[1] room hash, KEYS[2] players hash, KEYS[3..] the room's other keys (deleted if it closes)
 -- ARGV[1] userId
 -- Returns NOT_FOUND | NOT_MEMBER | LEFT | ROOM_CLOSED | HOST_CHANGED:<newHostId>
 if redis.call('EXISTS', KEYS[1]) == 0 then
@@ -21,11 +21,10 @@ end
 
 if nextHost == nil then
   -- No humans left: a room of only bots is pointless, so close it.
-  redis.call('DEL', KEYS[1], KEYS[2])
+  redis.call('DEL', unpack(KEYS))
   return 'ROOM_CLOSED'
 end
 
-redis.call('HINCRBY', KEYS[1], 'seq', 1)
 if redis.call('HGET', KEYS[1], 'hostId') == ARGV[1] then
   redis.call('HSET', KEYS[1], 'hostId', nextHost)
   return 'HOST_CHANGED:' .. nextHost
