@@ -1,0 +1,5 @@
+# Local-development overrides. Activated by `./gradlew :backend:bootRun` and the integration tests.
+management:
+  endpoint:
+    health:
+      show-details: always

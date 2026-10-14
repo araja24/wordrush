@@ -31,7 +31,7 @@ management:
         include: health,info,metrics,prometheus
   endpoint:
     health:
-      show-details: ${HEALTH_SHOW_DETAILS:always}
+      show-details: ${HEALTH_SHOW_DETAILS:never} # details leak versions/paths; enabled in the dev profile only
       probes:
         enabled: true
       group:

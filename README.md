@@ -33,4 +33,4 @@ Everything in containers instead: `docker compose -f infra/docker-compose.yml --
 | `DATABASE_USERNAME` / `DATABASE_PASSWORD` | `wordrush` / `wordrush` |
 | `REDIS_URL` | `redis://localhost:6379` |
 | `LOG_FORMAT` | empty (plain text); `logstash` for JSON |
-| `HEALTH_SHOW_DETAILS` | `always` |
+| `HEALTH_SHOW_DETAILS` | `never` (the `dev` profile, used by `bootRun` and tests, shows details) |
