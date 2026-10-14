@@ -1,4 +1,4 @@
-import type { AuthResponse, RoomSettings, RoomSnapshot, User } from './types';
+import type { AuthResponse, Difficulty, RoomSettings, RoomSnapshot, User } from './types';
 
 /** Empty in dev (Vite proxies /api); the backend's origin in production. */
 export const API_URL: string = import.meta.env.VITE_API_URL ?? '';
@@ -44,6 +44,13 @@ export const api = {
 
   leaveRoom: (token: string, code: string) =>
     request<void>(`/api/v1/rooms/${encodeURIComponent(code)}/leave`, { method: 'POST', token }),
+
+  addBot: (token: string, code: string, difficulty: Difficulty) =>
+    request<RoomSnapshot>(`/api/v1/rooms/${encodeURIComponent(code)}/bots`, {
+      method: 'POST',
+      token,
+      body: JSON.stringify({ difficulty }),
+    }),
 
   kick: (token: string, code: string, userId: string) =>
     request<void>(`/api/v1/rooms/${encodeURIComponent(code)}/players/${userId}`, { method: 'DELETE', token }),

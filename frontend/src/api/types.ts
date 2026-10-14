@@ -2,6 +2,7 @@
 
 export type RoomStatus = 'LOBBY' | 'COUNTDOWN' | 'IN_ROUND' | 'ROUND_RESULTS' | 'GAME_OVER';
 export type RoundEndReason = 'SOLVED' | 'TIMEOUT' | 'ALL_FAILED';
+export type Difficulty = 'EASY' | 'MEDIUM' | 'HARD';
 export type GuessOutcome = 'WRONG' | 'WON' | 'CORRECT_LATE' | 'ROUND_OVER' | 'OUT_OF_GUESSES' | 'NOT_A_WORD';
 
 export interface User {

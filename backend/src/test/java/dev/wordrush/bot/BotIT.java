@@ -73,6 +73,17 @@ class BotIT extends IntegrationTest {
     }
 
     @Test
+    void eachBotGetsItsOwnFirstName() {
+        AuthResponse host = signIn("host");
+        String code = createRoom(host, Map.of());
+        addBot(host, code, "HARD");
+
+        ResponseEntity<Map<String, Object>> second = addBot(host, code, "MEDIUM");
+
+        assertThat(second.getBody().get("players").toString()).contains("Ada (hard)", "Grace (medium)");
+    }
+
+    @Test
     void onlyTheHostCanAddBots() {
         AuthResponse host = signIn("host");
         String code = createRoom(host, Map.of());

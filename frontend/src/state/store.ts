@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { ApiError, api } from '../api/http';
-import type { AuthResponse, GuessResult, RoomSettings, RoomSnapshot } from '../api/types';
+import type { AuthResponse, Difficulty, GuessResult, RoomSettings, RoomSnapshot } from '../api/types';
 import { RoomSocket } from '../realtime/RoomSocket';
 import { initialState, reduce, type Action, type GameState } from './reducer';
 
@@ -50,6 +50,7 @@ interface AppState {
   joinRoom(code: string): Promise<void>;
   leaveRoom(): Promise<void>;
   kick(userId: string): Promise<void>;
+  addBot(difficulty: Difficulty): Promise<void>;
   startGame(): void;
   guess(word: string): void;
   playAgain(): void;
@@ -161,6 +162,13 @@ export const useApp = create<AppState>((set, get) => {
       guarded(async (auth) => {
         const code = get().game?.room?.code;
         if (code) await api.kick(auth.accessToken, code, userId);
+      }),
+
+    // The new player arrives through the PLAYER_JOINED event, like anyone else.
+    addBot: (difficulty) =>
+      guarded(async (auth) => {
+        const code = get().game?.room?.code;
+        if (code) await api.addBot(auth.accessToken, code, difficulty);
       }),
 
     startGame: () => socket?.start(),

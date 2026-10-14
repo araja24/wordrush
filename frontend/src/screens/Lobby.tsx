@@ -1,13 +1,16 @@
 import { useState } from 'react';
+import type { Difficulty } from '../api/types';
 import { LetterTiles } from '../components/LetterTiles';
 import { useApp } from '../state/store';
 
 export function Lobby() {
-  const { game, startGame, leaveRoom, kick } = useApp();
+  const { game, startGame, leaveRoom, kick, addBot } = useApp();
   const [copied, setCopied] = useState(false);
+  const [difficulty, setDifficulty] = useState<Difficulty>('MEDIUM');
   if (!game?.room) return null;
   const { room, me } = game;
   const isHost = room.hostId === me;
+  const full = room.players.length >= room.settings.maxPlayers;
   const inviteLink = `${window.location.origin}/?room=${room.code}`;
 
   async function copyInvite() {
@@ -50,6 +53,21 @@ export function Lobby() {
             </li>
           ))}
         </ul>
+        {isHost && (
+          <div className="add-bot">
+            <label className="field">
+              <span>Bot difficulty</span>
+              <select value={difficulty} onChange={(e) => setDifficulty(e.target.value as Difficulty)}>
+                <option value="EASY">Easy: slow, sometimes guesses blind</option>
+                <option value="MEDIUM">Medium: steady, always uses the clues</option>
+                <option value="HARD">Hard: fast, solves in about 3.5 guesses</option>
+              </select>
+            </label>
+            <button type="button" className="button" disabled={full} onClick={() => void addBot(difficulty)}>
+              Add bot
+            </button>
+          </div>
+        )}
         <p className="hint">
           {room.settings.totalRounds} rounds, {room.settings.roundSeconds} seconds each.
         </p>

@@ -126,12 +126,14 @@ public class BotService {
     }
 
     private static String nickname(Room room, Difficulty difficulty) {
-        Set<String> taken = room.players().stream().map(Player::nickname).collect(Collectors.toSet());
-        String suffix = " (" + difficulty.name().toLowerCase(Locale.ROOT) + ")";
-        return NAMES.stream()
-                .map(name -> name + suffix)
-                .filter(name -> !taken.contains(name))
+        // Compare first names only, so two bots never share one (no "Ada (hard)" next to "Ada (easy)").
+        Set<String> taken = room.players().stream()
+                .map(player -> player.nickname().split(" \\(")[0])
+                .collect(Collectors.toSet());
+        String name = NAMES.stream()
+                .filter(candidate -> !taken.contains(candidate))
                 .findFirst()
-                .orElse("Bot" + (room.players().size() + 1) + suffix);
+                .orElse("Bot" + (room.players().size() + 1));
+        return name + " (" + difficulty.name().toLowerCase(Locale.ROOT) + ")";
     }
 }
