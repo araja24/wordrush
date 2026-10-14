@@ -1,12 +1,10 @@
 package dev.wordrush.bot;
 
 import dev.wordrush.auth.AuthenticatedUser;
-import dev.wordrush.core.BotTiming;
+import dev.wordrush.core.BotRound;
 import dev.wordrush.core.Difficulty;
 import dev.wordrush.core.Feedback;
 import dev.wordrush.core.FeedbackTable;
-import dev.wordrush.core.GameRules;
-import dev.wordrush.core.Solver;
 import dev.wordrush.event.RoomEvent;
 import dev.wordrush.game.GameService;
 import dev.wordrush.game.GuessOutcome;
@@ -23,7 +21,7 @@ import org.slf4j.LoggerFactory;
  * only from its own colours. It never reads the answer.
  *
  * <p>Each round runs on its own virtual thread, which mostly sleeps while "thinking", so hundreds
- * of bots cost almost nothing.
+ * of bots cost almost nothing. The play itself is {@link BotRound}, shared with the CLI bot.
  */
 class BotPlayer {
 
@@ -84,21 +82,10 @@ class BotPlayer {
     }
 
     private void playRound(UUID roundId) {
-        SplittableRandom rng = new SplittableRandom();
-        Solver solver = new Solver(table, difficulty, rng);
         try {
-            for (int attempt = 0; attempt < GameRules.MAX_ATTEMPTS; attempt++) {
-                Thread.sleep(BotTiming.thinkMillis(difficulty, rng, thinkTimeScale));
-                if (!roundId.equals(currentRound)) {
-                    return;
-                }
-                String word = solver.nextGuess();
-                GuessResult result = games.guess(user, roomCode, new GuessRequest(UUID.randomUUID(), roundId, word));
-                if (result.outcome() != GuessOutcome.WRONG) {
-                    return; // won, too late, round over, or out of guesses
-                }
-                solver.observe(word, Feedback.parse(result.feedback()));
-            }
+            BotRound.play(table, difficulty, thinkTimeScale, new SplittableRandom(),
+                    () -> roundId.equals(currentRound),
+                    word -> submit(roundId, word));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt(); // round ended while thinking
         } catch (RuntimeException e) {
@@ -108,5 +95,10 @@ class BotPlayer {
                 log.debug("Bot interrupted as the round ended room={} bot={}", roomCode, user.id());
             }
         }
+    }
+
+    private Feedback submit(UUID roundId, String word) {
+        GuessResult result = games.guess(user, roomCode, new GuessRequest(UUID.randomUUID(), roundId, word));
+        return result.outcome() == GuessOutcome.WRONG ? Feedback.parse(result.feedback()) : null;
     }
 }

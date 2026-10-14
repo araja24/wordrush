@@ -28,6 +28,18 @@ npm run dev        # open http://localhost:5173
 
 Each browser tab is a separate player (the session lives in `sessionStorage`), so two tabs are enough to play against yourself. Send friends an invite link from the lobby (`/?room=CODE`).
 
+### Bots
+
+In the lobby the host can **Add bot** (easy, medium or hard). Bots play through the same rules as people and only ever see their own colours.
+
+Or run bots as separate clients over the real WebSocket protocol:
+
+```bash
+./gradlew :bot:bootJar
+java -jar bot/build/libs/wordrush-bot.jar --room ABC234 --count 3 --difficulty HARD
+#   --server http://localhost:8080   --think-scale 1.0 (smaller = faster)   --stay (keep playing after a game)
+```
+
 Everything in containers instead: `docker compose -f infra/docker-compose.yml --profile app up --build`
 
 ## Test

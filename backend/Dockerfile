@@ -6,6 +6,7 @@ COPY gradlew settings.gradle.kts build.gradle.kts ./
 COPY gradle gradle
 COPY game-core/build.gradle.kts game-core/
 COPY backend/build.gradle.kts backend/
+COPY bot/build.gradle.kts bot/
 # Resolve dependencies in their own layer so code changes don't re-download them.
 RUN ./gradlew :backend:dependencies --no-daemon > /dev/null
 COPY game-core/src game-core/src
