@@ -18,11 +18,22 @@ curl localhost:8080/actuator/health/readiness
 
 API docs: http://localhost:8080/swagger-ui.html. Call `POST /api/v1/auth/guest`, then **Authorize** with the returned `accessToken`.
 
+Frontend on :5173 (proxies `/api` and `/ws` to the backend):
+
+```bash
+cd frontend
+npm install
+npm run dev        # open http://localhost:5173
+```
+
+Each browser tab is a separate player (the session lives in `sessionStorage`), so two tabs are enough to play against yourself. Send friends an invite link from the lobby (`/?room=CODE`).
+
 Everything in containers instead: `docker compose -f infra/docker-compose.yml --profile app up --build`
 
 ## Test
 
 ```bash
+cd frontend && npm test && npm run typecheck   # reducer unit tests + TypeScript
 ./gradlew test   # integration tests start their own Postgres/Redis via Testcontainers (Docker must be running)
 ```
 

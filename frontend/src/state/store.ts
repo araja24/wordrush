@@ -1,0 +1,183 @@
+import { create } from 'zustand';
+import { ApiError, api } from '../api/http';
+import type { AuthResponse, GuessResult, RoomSettings, RoomSnapshot } from '../api/types';
+import { RoomSocket } from '../realtime/RoomSocket';
+import { initialState, reduce, type Action, type GameState } from './reducer';
+
+/**
+ * Auth lives in sessionStorage, not localStorage: each browser tab is its own player (handy for
+ * testing against yourself), and a refresh keeps you signed in and in your room.
+ */
+const AUTH_KEY = 'wordrush.auth';
+
+function loadAuth(): AuthResponse | null {
+  try {
+    const raw = sessionStorage.getItem(AUTH_KEY);
+    const auth = raw ? (JSON.parse(raw) as AuthResponse) : null;
+    return auth && new Date(auth.expiresAt).getTime() > Date.now() ? auth : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveAuth(auth: AuthResponse | null): void {
+  try {
+    if (auth) sessionStorage.setItem(AUTH_KEY, JSON.stringify(auth));
+    else sessionStorage.removeItem(AUTH_KEY);
+  } catch {
+    // storage unavailable (private mode); the session just won't survive a refresh
+  }
+}
+
+export interface Toast {
+  id: number;
+  text: string;
+}
+
+interface AppState {
+  auth: AuthResponse | null;
+  game: GameState | null;
+  connected: boolean;
+  resuming: boolean;
+  toast: Toast | null;
+  /** The latest private guess result, so the board can react (shake, clear input). */
+  lastResult: GuessResult | null;
+
+  signIn(nickname: string): Promise<void>;
+  signOut(): Promise<void>;
+  resume(): Promise<void>;
+  createRoom(settings: Partial<RoomSettings>): Promise<void>;
+  joinRoom(code: string): Promise<void>;
+  leaveRoom(): Promise<void>;
+  kick(userId: string): Promise<void>;
+  startGame(): void;
+  guess(word: string): void;
+  playAgain(): void;
+  showToast(text: string): void;
+}
+
+let socket: RoomSocket | null = null;
+let toastId = 0;
+
+export const useApp = create<AppState>((set, get) => {
+  const dispatch = (action: Action) => {
+    const game = get().game;
+    if (!game) return;
+    const next = reduce(game, action);
+    set({ game: next });
+    if (next.needsResync && !game.needsResync) socket?.resync();
+  };
+
+  const openRoom = (auth: AuthResponse, room: RoomSnapshot) => {
+    socket?.disconnect();
+    set({ game: initialState(auth.user.id, room), lastResult: null });
+    socket = new RoomSocket(auth.accessToken, room.code, {
+      onMessage: (message) => dispatch({ type: 'message', message, receivedAt: Date.now() }),
+      onSnapshot: (snapshot) => dispatch({ type: 'snapshot', snapshot, receivedAt: Date.now() }),
+      onGuessResult: (result) => {
+        set({ lastResult: result });
+        dispatch({ type: 'guessResult', result });
+      },
+      onError: (error) => get().showToast(error.message),
+      onKicked: () => {
+        closeRoom();
+        get().showToast('The host removed you from the room.');
+      },
+      onConnectionChange: (connected) => set({ connected }),
+    });
+    socket.connect();
+  };
+
+  const closeRoom = () => {
+    socket?.disconnect();
+    socket = null;
+    set({ game: null, connected: false, lastResult: null });
+  };
+
+  /** Runs an API call; an expired session sends you back to sign-in, other errors become a toast. */
+  const guarded = async (work: (auth: AuthResponse) => Promise<void>) => {
+    const auth = get().auth;
+    if (!auth) return;
+    try {
+      await work(auth);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        closeRoom();
+        saveAuth(null);
+        set({ auth: null });
+        get().showToast('Your session expired. Pick a nickname to play again.');
+      } else {
+        get().showToast(error instanceof Error ? error.message : 'Something went wrong.');
+      }
+    }
+  };
+
+  return {
+    auth: loadAuth(),
+    game: null,
+    connected: false,
+    resuming: false,
+    toast: null,
+    lastResult: null,
+
+    async signIn(nickname) {
+      try {
+        const auth = await api.signIn(nickname);
+        saveAuth(auth);
+        set({ auth });
+      } catch (error) {
+        get().showToast(error instanceof Error ? error.message : 'Could not sign in.');
+      }
+    },
+
+    async signOut() {
+      await get().leaveRoom();
+      saveAuth(null);
+      set({ auth: null });
+    },
+
+    /** After a refresh: rejoin the room we were in, if it still exists. */
+    async resume() {
+      set({ resuming: true });
+      await guarded(async (auth) => {
+        const room = await api.currentRoom(auth.accessToken);
+        if (room) openRoom(auth, room);
+      });
+      set({ resuming: false });
+    },
+
+    createRoom: (settings) => guarded(async (auth) => openRoom(auth, await api.createRoom(auth.accessToken, settings))),
+
+    joinRoom: (code) => guarded(async (auth) => openRoom(auth, await api.joinRoom(auth.accessToken, code.trim()))),
+
+    leaveRoom: () =>
+      guarded(async (auth) => {
+        const code = get().game?.room?.code;
+        closeRoom();
+        if (code) await api.leaveRoom(auth.accessToken, code);
+      }),
+
+    kick: (userId) =>
+      guarded(async (auth) => {
+        const code = get().game?.room?.code;
+        if (code) await api.kick(auth.accessToken, code, userId);
+      }),
+
+    startGame: () => socket?.start(),
+
+    guess(word) {
+      const roundId = get().game?.round?.roundId;
+      if (roundId) socket?.guess(roundId, word);
+    },
+
+    playAgain: () => socket?.playAgain(),
+
+    showToast(text) {
+      const toast = { id: ++toastId, text };
+      set({ toast });
+      setTimeout(() => {
+        if (get().toast?.id === toast.id) set({ toast: null });
+      }, 3500);
+    },
+  };
+});
