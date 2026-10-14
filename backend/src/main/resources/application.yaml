@@ -52,6 +52,11 @@ wordrush:
     allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5173}
   room:
     ttl: 2h
+  game:
+    countdown: 3s
+    results-pause: 5s
+    idempotency-ttl: 10m
+    timer-poll-millis: 250
 
 springdoc:
   swagger-ui:

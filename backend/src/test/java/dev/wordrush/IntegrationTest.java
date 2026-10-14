@@ -17,7 +17,12 @@ import org.springframework.web.client.RestClient;
  */
 @Import(TestcontainersConfiguration.class)
 @ActiveProfiles("dev")
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
+        // Fast phases so game tests don't wait 3-5 s per transition.
+        "wordrush.game.countdown=200ms",
+        "wordrush.game.results-pause=200ms",
+        "wordrush.game.timer-poll-millis=25"
+})
 public abstract class IntegrationTest {
 
     protected static final ParameterizedTypeReference<Map<String, Object>> JSON_MAP =
