@@ -57,6 +57,8 @@ wordrush:
     results-pause: 5s
     idempotency-ttl: 10m
     timer-poll-millis: 250
+  bots:
+    think-time-scale: 1.0
 
 springdoc:
   swagger-ui:

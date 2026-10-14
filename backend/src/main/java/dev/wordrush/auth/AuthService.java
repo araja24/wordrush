@@ -22,9 +22,10 @@ public class AuthService {
         this.tokens = tokens;
     }
 
-    public AuthResponse loginAsGuest(String nickname) {
-        User user = createWithFreeUsername(nickname);
-        log.info("Guest created userId={} username={}", user.id(), user.username());
+    /** {@code bot} only labels the account (a badge in the UI); it grants nothing. */
+    public AuthResponse loginAsGuest(String nickname, boolean bot) {
+        User user = createWithFreeUsername(nickname, bot);
+        log.info("Guest created userId={} username={} bot={}", user.id(), user.username(), bot);
         return AuthResponse.of(tokens.issue(user), user);
     }
 
@@ -32,10 +33,15 @@ public class AuthService {
      * Picks a random {@code #0000-#9999} suffix. The pre-check makes collisions rare; the unique
      * constraint is the real guarantee if two requests race for the same name.
      */
-    private User createWithFreeUsername(String nickname) {
+    /** An account for an in-app bot; bots never sign in, they act through the services directly. */
+    public User registerBot(String nickname) {
+        return createWithFreeUsername(nickname, true);
+    }
+
+    private User createWithFreeUsername(String nickname, boolean bot) {
         for (int attempt = 0; attempt < MAX_USERNAME_ATTEMPTS; attempt++) {
             int discriminator = ThreadLocalRandom.current().nextInt(10_000);
-            User candidate = User.guest(nickname, discriminator);
+            User candidate = bot ? User.bot(nickname, discriminator) : User.guest(nickname, discriminator);
             if (users.existsByUsername(candidate.username())) {
                 continue;
             }

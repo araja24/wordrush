@@ -15,7 +15,9 @@ import dev.wordrush.event.RoomEvent.RoundStarted;
 import dev.wordrush.room.RoomRepository;
 import java.time.Clock;
 import java.util.UUID;
+import dev.wordrush.event.RoomEventBroadcast;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.SimpMessageType;
@@ -34,15 +36,17 @@ class StompRoomBroadcaster implements RoomBroadcaster {
     private final SimpUserRegistry userRegistry;
     private final MessageChannel clientInboundChannel;
     private final RoomRepository rooms;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
 
     StompRoomBroadcaster(SimpMessagingTemplate template, SimpUserRegistry userRegistry,
                          @Qualifier("clientInboundChannel") MessageChannel clientInboundChannel,
-                         RoomRepository rooms, Clock clock) {
+                         RoomRepository rooms, ApplicationEventPublisher events, Clock clock) {
         this.template = template;
         this.userRegistry = userRegistry;
         this.clientInboundChannel = clientInboundChannel;
         this.rooms = rooms;
+        this.events = events;
         this.clock = clock;
     }
 
@@ -54,6 +58,7 @@ class StompRoomBroadcaster implements RoomBroadcaster {
         }
         template.convertAndSend("/topic/rooms/" + roomCode,
                 new RoomMessage(typeOf(event), roomCode, seq, clock.millis(), event));
+        events.publishEvent(new RoomEventBroadcast(roomCode, event)); // in-process listeners, e.g. bots
     }
 
     @Override

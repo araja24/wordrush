@@ -21,7 +21,8 @@ import org.springframework.web.client.RestClient;
         // Fast phases so game tests don't wait 3-5 s per transition.
         "wordrush.game.countdown=200ms",
         "wordrush.game.results-pause=200ms",
-        "wordrush.game.timer-poll-millis=25"
+        "wordrush.game.timer-poll-millis=25",
+        "wordrush.bots.think-time-scale=0.01"
 })
 public abstract class IntegrationTest {
 

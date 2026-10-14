@@ -27,6 +27,6 @@ class AuthController {
     @PostMapping("/guest")
     @ResponseStatus(HttpStatus.CREATED)
     AuthResponse guest(@Valid @RequestBody GuestLoginRequest request) {
-        return authService.loginAsGuest(request.nickname());
+        return authService.loginAsGuest(request.nickname(), Boolean.TRUE.equals(request.bot()));
     }
 }
