@@ -7,7 +7,8 @@ spring:
     virtual:
       enabled: true
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/wordrush}
+    # Render hands out the host/port/database separately (its connection string isn't JDBC).
+    url: ${DATABASE_URL:jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:wordrush}}
     username: ${DATABASE_USERNAME:wordrush}
     password: ${DATABASE_PASSWORD:wordrush}
   jpa:
@@ -23,6 +24,7 @@ spring:
 server:
   port: ${PORT:8080}
   shutdown: graceful
+  forward-headers-strategy: native # behind Render's TLS proxy: trust X-Forwarded-Proto/Host
 
 management:
   endpoints:
@@ -49,7 +51,8 @@ wordrush:
     ttl: 12h
     issuer: wordrush
   cors:
-    allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5173}
+    # On Render, RENDER_EXTERNAL_URL is the service's own https URL (the page and API share it).
+    allowed-origins: ${ALLOWED_ORIGINS:${RENDER_EXTERNAL_URL:http://localhost:5173}}
   room:
     ttl: 2h
   game:

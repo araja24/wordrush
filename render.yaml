@@ -1,0 +1,59 @@
+# Render Blueprint: the whole WordRush stack. Dashboard: New > Blueprint > pick this repo.
+# One Docker web service serves both the API/WebSockets and the built React app.
+services:
+  - type: web
+    name: wordrush
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /actuator/health/readiness
+    envVars:
+      # Postgres: Render's connection string isn't JDBC, so pass the parts (see application.yaml).
+      - key: DB_HOST
+        fromDatabase:
+          name: wordrush-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: wordrush-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: wordrush-db
+          property: database
+      - key: DATABASE_USERNAME
+        fromDatabase:
+          name: wordrush-db
+          property: user
+      - key: DATABASE_PASSWORD
+        fromDatabase:
+          name: wordrush-db
+          property: password
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: wordrush-kv
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true # random 256-bit secret, created once by Render
+      - key: LOG_FORMAT
+        value: logstash
+      - key: JAVA_TOOL_OPTIONS
+        value: -XX:+UseSerialGC -Xss512k # small heap footprint for the 512 MB free instance
+
+  - type: keyvalue
+    name: wordrush-kv
+    plan: free
+    region: oregon
+    maxmemoryPolicy: noeviction # never silently drop rooms, timers or scores
+    ipAllowList: [] # reachable only from services in this Render account
+
+databases:
+  - name: wordrush-db
+    plan: free
+    region: oregon
+    databaseName: wordrush
+    user: wordrush
+    ipAllowList: [] # reachable only from services in this Render account

@@ -224,7 +224,7 @@ Write unit tests in every stage. Stage 7 adds the heavy integration and concurre
 | 9 | **Horizontal scaling:** 2 backend replicas behind nginx (WS upgrade), Redis pub/sub event fan-out, `ZREM`-claimed timers and sweeper | Players on different instances share a room; `docker stop backend-1` → clients reconnect to backend-2 and resync with no lost round |
 | 10 | **Load test:** k6 WS script (hand-written STOMP frames) with N rooms × 4 players guessing every 2 s; plus a bot-swarm mode | Report: max concurrent players at p95 guess RTT < 100 ms and error rate < 1%, for 1 vs 2 instances |
 | 11 | **CI + polish:** GitHub Actions (build, Testcontainers tests, frontend build, Docker images), README with diagrams, metrics table, demo GIF | Green CI badge; `docker compose up` gives a playable app from a fresh clone |
-| 12 | **Deploy to Render** (section 9): `render.yaml` Blueprint, env-var config, CORS/WS origins, health check | Friends open the public URL, join your room code from their own devices, and finish a game over `wss://` |
+| 12 | **Deploy to Render:** `render.yaml` Blueprint (one Docker service serving API + React app, Render Postgres, Render Key Value), env-var config, same-origin WebSockets. Guide: [docs/deploy-render.md](docs/deploy-render.md) | Friends open the public URL, join your room code from their own devices, and finish a game over `wss://` |
 
 > **Prepare for deployment from Stage 0:** read all config from env vars (`server.port=${PORT:8080}`, `${DATABASE_URL}`, `${REDIS_URL}`, `${JWT_SECRET}`, `${ALLOWED_ORIGINS}`), never hard-code `localhost`, and build the backend as a Docker image. Deploying is then config work, not a rewrite.
 

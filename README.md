@@ -61,3 +61,7 @@ cd frontend && npm test && npm run typecheck   # reducer unit tests + TypeScript
 | `JWT_SECRET` | **required** outside the dev profile (32+ chars); the app refuses to start without it |
 | `ALLOWED_ORIGINS` | `http://localhost:5173` (comma-separated browser origins for CORS) |
 | `HEALTH_SHOW_DETAILS` | `never` (the `dev` profile, used by `bootRun` and tests, shows details) |
+
+## Deploy
+
+One Render Blueprint ([`render.yaml`](render.yaml)) creates the web service, Postgres and Key Value. Step-by-step: [docs/deploy-render.md](docs/deploy-render.md).
