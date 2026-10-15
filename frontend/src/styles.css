@@ -14,6 +14,9 @@
   --amber: #ffb72b;
   --cyan: #4ccbf0;
   --cyan-hover: #9fe3f7;
+  /* Feedback colours: blue = right letter, right spot; yellow = in the word, wrong spot. */
+  --correct: var(--cyan);
+  --present: var(--amber);
   --absent: #3a3d6a;
   --absent-text: #d6d3f2;
   --tile-empty: #2e3160;
@@ -934,13 +937,13 @@ kbd {
   border: 3px solid var(--text);
 }
 .tile--G {
-  background: var(--amber);
-  border-color: var(--amber);
+  background: var(--correct);
+  border-color: var(--correct);
   color: var(--on-light);
 }
 .tile--Y {
-  background: var(--cyan);
-  border-color: var(--cyan);
+  background: var(--present);
+  border-color: var(--present);
   color: var(--on-light);
 }
 .tile--B {
@@ -1007,11 +1010,11 @@ kbd {
   font-size: 15px;
 }
 .key--G {
-  background: var(--amber);
+  background: var(--correct);
   color: var(--on-light);
 }
 .key--Y {
-  background: var(--cyan);
+  background: var(--present);
   color: var(--on-light);
 }
 .key--B {
@@ -1091,10 +1094,10 @@ kbd {
   background: var(--mini-empty);
 }
 .mini__cell--G {
-  background: var(--amber);
+  background: var(--correct);
 }
 .mini__cell--Y {
-  background: var(--cyan);
+  background: var(--present);
 }
 .mini__cell--B {
   background: var(--mini-absent);
@@ -1242,7 +1245,7 @@ kbd {
   background: var(--text);
 }
 .answer--solved span {
-  background: var(--amber);
+  background: var(--correct);
 }
 .headline {
   font-weight: 800;
@@ -1471,7 +1474,7 @@ kbd {
   background: var(--text);
 }
 .words__tiles--solved span {
-  background: var(--amber);
+  background: var(--correct);
 }
 .words__who {
   margin-left: auto;
