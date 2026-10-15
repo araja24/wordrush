@@ -118,6 +118,7 @@ Room codes are 6 characters from `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (no 0/O/1/I),
 | `/app/rooms/{code}/guess` | `{guessId: uuid, roundId, word}` | Idempotent by `guessId` |
 | `/app/rooms/{code}/heartbeat` | `{}` | Every 5 s; refreshes presence |
 | `/app/rooms/{code}/playAgain` | `{}` | Host only, GAME_OVER → LOBBY |
+| `/app/rooms/{code}/chat` | `{text, reaction}` | Max 200 chars, 5 per 5 s per user. Mid-round only the fixed quick reactions are accepted (free text could pass hints) |
 | SUBSCRIBE `/app/rooms/{code}/state` | none | `@SubscribeMapping` returns a `RoomSnapshot` to this client only (used for resync) |
 
 **Server → client.** Every event uses the envelope `{type, roomCode, seq, serverTime, payload}`. `seq` is a per-room counter (`HINCRBY`). If a client sees a gap in `seq`, it re-subscribes to `/state`.
@@ -132,6 +133,7 @@ Room codes are 6 characters from `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (no 0/O/1/I),
 | | `ROUND_ENDED` | `answer, winnerId, winnerAttempts, reason, runnersUp[] (+ms behind)` |
 | | `LEADERBOARD` | `[{userId, nickname, score, rank}]` |
 | | `GAME_OVER` | final standings, `gameId` |
+| | `CHAT` | `userId, nickname, text, reaction` (not stored; a refresh starts the chat empty) |
 | `/user/queue/guess-result` | `GUESS_RESULT` | `guessId, attempt, feedback, outcome: WON\|CORRECT_LATE\|WRONG\|OUT_OF_GUESSES` |
 | `/user/queue/errors` | `ERROR` | `{code, message, guessId?}` (e.g. `NOT_A_WORD`, `RATE_LIMITED`, `ROUND_OVER`) |
 

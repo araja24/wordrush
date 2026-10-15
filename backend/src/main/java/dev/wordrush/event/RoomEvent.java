@@ -50,4 +50,8 @@ public sealed interface RoomEvent {
 
     record ReturnedToLobby() implements RoomEvent {
     }
+
+    /** A chat line or quick reaction. Text is already cleaned and limited by the chat service. */
+    record ChatPosted(UUID userId, String nickname, String text, boolean reaction) implements RoomEvent {
+    }
 }

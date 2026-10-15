@@ -2,6 +2,8 @@ package dev.wordrush.realtime;
 
 import static dev.wordrush.realtime.StompAuthChannelInterceptor.caller;
 
+import dev.wordrush.chat.ChatRequest;
+import dev.wordrush.chat.ChatService;
 import dev.wordrush.common.error.DomainException;
 import dev.wordrush.game.GameService;
 import dev.wordrush.game.GameSnapshot;
@@ -31,9 +33,11 @@ class GameMessageController {
     }
 
     private final GameService games;
+    private final ChatService chat;
 
-    GameMessageController(GameService games) {
+    GameMessageController(GameService games, ChatService chat) {
         this.games = games;
+        this.chat = chat;
     }
 
     @MessageMapping("/rooms/{code}/start")
@@ -50,6 +54,11 @@ class GameMessageController {
     @MessageMapping("/rooms/{code}/playAgain")
     void playAgain(@DestinationVariable String code, Principal principal) {
         games.playAgain(caller(principal), code);
+    }
+
+    @MessageMapping("/rooms/{code}/chat")
+    void chat(@DestinationVariable String code, @Payload ChatRequest request, Principal principal) {
+        chat.post(caller(principal), code, request);
     }
 
     /** Request/reply: subscribing to /app/rooms/{code}/state returns the snapshot to this client only. */

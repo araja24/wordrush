@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GameSnapshot, RoomMessage, RoomSnapshot } from '../api/types';
-import { bestGreens, botName, initialState, letterStates, reduce, type GameState } from './reducer';
+import { CHAT_LIMIT, bestGreens, botName, initialState, letterStates, reduce, type GameState } from './reducer';
 
 const ME = 'me';
 const OTHER = 'other';
@@ -112,5 +112,52 @@ describe('helpers', () => {
       msg('COUNTDOWN', 4, { roundNo: 1, totalRounds: 2, startsAt: 1 }),
     );
     expect(state.history).toEqual([]);
+  });
+});
+
+describe('chat', () => {
+  it('interleaves messages with lines narrating the game', () => {
+    const state = play(
+      initialState(ME, room),
+      msg('PLAYER_JOINED', 1, { userId: OTHER, nickname: 'maya', bot: false }),
+      msg('PLAYER_JOINED', 2, { userId: 'bot', nickname: 'Ada (hard)', bot: true }),
+      msg('CHAT', 3, { userId: OTHER, nickname: 'maya', text: 'who added a hard bot', reaction: false }),
+      msg('COUNTDOWN', 4, { roundNo: 1, totalRounds: 3, startsAt: 5_000 }),
+      msg('ROUND_STARTED', 5, { roundId: 'r1', roundNo: 1, totalRounds: 3, endsAt: 95_000 }),
+      msg('CHAT', 6, { userId: ME, nickname: 'me', text: 'so close', reaction: true }),
+      msg('ROUND_ENDED', 7, { roundId: 'r1', roundNo: 1, answer: 'BRISK', reason: 'SOLVED', winnerId: OTHER, winnerAttempts: 4, points: 180, solveMillis: 51_962, nextPhaseAt: 100_000 }),
+      msg('PLAYER_LEFT', 8, { userId: 'bot', kicked: true }),
+    );
+
+    expect(state.chat.map((l) => [l.id, l.kind, l.text])).toEqual([
+      [1, 'system', 'maya joined'],
+      [2, 'system', 'Ada (bot) joined'],
+      [3, 'message', 'who added a hard bot'],
+      [4, 'system', 'Round 1 starting'],
+      [6, 'reaction', 'so close'],
+      [7, 'system', 'maya won round 1 · BRISK'],
+      [8, 'system', 'Ada was removed'],
+    ]);
+    expect(state.chat[2]).toMatchObject({ userId: OTHER, name: 'maya' });
+  });
+
+  it('ignores replayed messages and survives a resync in the same room', () => {
+    const chatted = play(
+      initialState(ME, room),
+      msg('CHAT', 1, { userId: OTHER, nickname: 'maya', text: 'gg', reaction: false }),
+      msg('CHAT', 1, { userId: OTHER, nickname: 'maya', text: 'gg', reaction: false }),
+    );
+    expect(chatted.chat).toHaveLength(1);
+
+    const snapshot: GameSnapshot = { room: { ...room, seq: 5 }, roundNo: 0, phaseEndsAt: 0, round: null, leaderboard: [], serverTime: 1_000 };
+    expect(reduce(chatted, { type: 'snapshot', snapshot, receivedAt: 1_000 }).chat).toHaveLength(1);
+  });
+
+  it('keeps only the latest lines', () => {
+    const many = Array.from({ length: CHAT_LIMIT + 5 }, (_, i) =>
+      msg('CHAT', i + 1, { userId: OTHER, nickname: 'maya', text: `line ${i + 1}`, reaction: false }));
+    const state = play(initialState(ME, room), ...many);
+    expect(state.chat).toHaveLength(CHAT_LIMIT);
+    expect(state.chat[0].text).toBe('line 6');
   });
 });

@@ -45,6 +45,10 @@ interface AppState {
   helpOpen: boolean;
   /** The latest private guess result, so the board can react (shake, clear input). */
   lastResult: GuessResult | null;
+  /** Whether the floating chat panel (or phone sheet) is open. The lobby's docked chat is always open. */
+  chatOpen: boolean;
+  /** Id of the newest chat line the player has had on screen; later lines count as unread. */
+  chatReadId: number;
 
   /** Resolves true once signed in. */
   signIn(nickname: string): Promise<boolean>;
@@ -58,6 +62,9 @@ interface AppState {
   startGame(): void;
   guess(word: string): void;
   playAgain(): void;
+  sendChat(text: string, reaction: boolean): void;
+  setChatOpen(open: boolean): void;
+  markChatRead(id: number): void;
   showToast(text: string): void;
   clearToast(): void;
   dismissRemoved(): void;
@@ -82,7 +89,7 @@ export const useApp = create<AppState>((set, get) => {
 
   const openRoom = (auth: AuthResponse, room: RoomSnapshot) => {
     socket?.disconnect();
-    set({ game: initialState(auth.user.id, room), lastResult: null });
+    set({ game: initialState(auth.user.id, room), lastResult: null, chatOpen: false, chatReadId: 0 });
     socket = new RoomSocket(auth.accessToken, room.code, {
       onMessage: (message) => dispatch({ type: 'message', message, receivedAt: Date.now() }),
       onSnapshot: (snapshot) => dispatch({ type: 'snapshot', snapshot, receivedAt: Date.now() }),
@@ -110,7 +117,7 @@ export const useApp = create<AppState>((set, get) => {
   const closeRoom = () => {
     socket?.disconnect();
     socket = null;
-    set({ game: null, connected: false, lastResult: null });
+    set({ game: null, connected: false, lastResult: null, chatOpen: false, chatReadId: 0 });
   };
 
   /** Runs an API call; an expired session sends you back to sign-in, other errors become a toast. */
@@ -143,6 +150,8 @@ export const useApp = create<AppState>((set, get) => {
     removedFrom: null,
     helpOpen: false,
     lastResult: null,
+    chatOpen: false,
+    chatReadId: 0,
 
     async signIn(nickname) {
       try {
@@ -204,6 +213,14 @@ export const useApp = create<AppState>((set, get) => {
     },
 
     playAgain: () => socket?.playAgain(),
+
+    sendChat: (text, reaction) => socket?.chat(text, reaction),
+
+    setChatOpen: (open) => set({ chatOpen: open }),
+
+    markChatRead: (id) => {
+      if (id > get().chatReadId) set({ chatReadId: id });
+    },
 
     clearToast: () => set({ toast: null }),
 

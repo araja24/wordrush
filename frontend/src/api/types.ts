@@ -113,7 +113,8 @@ export type RoomMessage =
     }>
   | Envelope<'LEADERBOARD', { standings: Standing[] }>
   | Envelope<'GAME_OVER', { standings: Standing[] }>
-  | Envelope<'RETURNED_TO_LOBBY', Record<string, never>>;
+  | Envelope<'RETURNED_TO_LOBBY', Record<string, never>>
+  | Envelope<'CHAT', { userId: string; nickname: string; text: string; reaction: boolean }>;
 
 interface Envelope<T extends string, P> {
   type: T;

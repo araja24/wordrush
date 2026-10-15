@@ -1,3 +1,4 @@
+import { Chat } from '../components/Chat';
 import { secondsUntil, useServerNow } from '../components/useServerNow';
 import { useApp } from '../state/store';
 
@@ -21,6 +22,7 @@ export function Countdown() {
         {seconds}
       </div>
       <p className="center-screen__sub">6 guesses · {roundSeconds} seconds</p>
+      <Chat />
     </main>
   );
 }

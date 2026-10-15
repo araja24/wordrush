@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PlayerView, Standing } from '../api/types';
 import { Board } from '../components/Board';
+import { Chat, ChatButton } from '../components/Chat';
 import { HelpIcon, MenuIcon, SpinnerIcon } from '../components/Icons';
 import { Keyboard } from '../components/Keyboard';
 import { MiniBoard } from '../components/MiniBoard';
@@ -129,6 +130,7 @@ export function Game() {
     <main className={`game${connected ? '' : ' is-offline'}`}>
       <header className="game-header">
         <div className="game-header__round">
+          <ChatButton />
           <span className="round-long">Round <strong>{Math.max(roundNo, 1)}</strong> of {room.settings.totalRounds}</span>
           <span className="round-short" aria-hidden="true"><strong>{Math.max(roundNo, 1)}</strong>/{room.settings.totalRounds}</span>
         </div>
@@ -194,6 +196,7 @@ export function Game() {
           })}
         </aside>
       </div>
+      <Chat headerButtonOnPhone />
     </main>
   );
 }

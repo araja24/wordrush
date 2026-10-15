@@ -1,3 +1,4 @@
+import { Chat } from '../components/Chat';
 import { secondsUntil, useServerNow } from '../components/useServerNow';
 import { bestGreens } from '../state/reducer';
 import { useApp } from '../state/store';
@@ -108,6 +109,7 @@ export function RoundResult() {
           <div style={{ width: `${Math.min(100, (left / pause) * 100)}%` }} />
         </div>
       </div>
+      <Chat />
     </main>
   );
 }

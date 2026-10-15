@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Chat } from '../components/Chat';
 import { useApp } from '../state/store';
 import { displayName } from './Game';
 
@@ -83,6 +84,7 @@ export function Final() {
           </section>
         </div>
       </div>
+      <Chat />
     </main>
   );
 }

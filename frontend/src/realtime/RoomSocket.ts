@@ -67,6 +67,11 @@ export class RoomSocket {
     this.send('playAgain', {});
   }
 
+  /** A chat line, or one of the quick reactions. Mid-round the server accepts reactions only. */
+  chat(text: string, reaction: boolean): void {
+    this.send('chat', { text, reaction });
+  }
+
   /** Returns the guessId; a retry must reuse it so the server counts the guess once. */
   guess(roundId: string, word: string): string {
     const guessId = crypto.randomUUID();

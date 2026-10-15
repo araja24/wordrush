@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Difficulty, PlayerView } from '../api/types';
+import { Chat, ChatButton } from '../components/Chat';
 import { CloseIcon, CrownIcon, HelpIcon, LinkIcon, ShareIcon } from '../components/Icons';
 import { LogoMini } from '../components/Logo';
 import { botName } from '../state/reducer';
@@ -61,9 +62,10 @@ export function Lobby() {
         <header className="topbar">
           <LogoMini />
           <div className="topbar__actions">
-            <button type="button" className="btn btn--sm" onClick={() => setHelpOpen(true)}>
+            <ChatButton />
+            <button type="button" className="btn btn--sm topbar__help" aria-label="How to play" onClick={() => setHelpOpen(true)}>
               <HelpIcon />
-              How to play
+              <span>How to play</span>
             </button>
             <button type="button" className="btn btn--sm btn--outline btn--muted" onClick={() => void leaveRoom()}>
               Leave
@@ -97,6 +99,7 @@ export function Lobby() {
               <strong>{room.settings.totalRounds}</strong> rounds · <strong>{room.settings.roundSeconds}s</strong> each ·{' '}
               <strong>{room.settings.maxPlayers}</strong> max
             </p>
+            <Chat docked headerButtonOnPhone />
           </section>
 
           <section className="card players" aria-labelledby="players-heading">

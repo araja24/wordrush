@@ -2,6 +2,7 @@ package dev.wordrush.realtime;
 
 import dev.wordrush.event.RoomBroadcaster;
 import dev.wordrush.event.RoomEvent;
+import dev.wordrush.event.RoomEvent.ChatPosted;
 import dev.wordrush.event.RoomEvent.Countdown;
 import dev.wordrush.event.RoomEvent.GameOver;
 import dev.wordrush.event.RoomEvent.HostChanged;
@@ -106,6 +107,7 @@ class StompRoomBroadcaster implements RoomBroadcaster {
             case LeaderboardUpdated e -> "LEADERBOARD";
             case GameOver e -> "GAME_OVER";
             case ReturnedToLobby e -> "RETURNED_TO_LOBBY";
+            case ChatPosted e -> "CHAT";
         };
     }
 }
