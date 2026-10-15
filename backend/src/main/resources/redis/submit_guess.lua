@@ -41,6 +41,12 @@ local attempt = redis.call('HINCRBY', KEYS[5], ARGV[1], 1)
 local entry = ARGV[3] .. ':' .. ARGV[4]
 local previous = redis.call('HGET', KEYS[4], ARGV[1])
 redis.call('HSET', KEYS[4], ARGV[1], previous and (previous .. ',' .. entry) or entry)
+-- These two hashes are first created here, so they need the room's TTL or they'd never expire.
+local ttl = redis.call('PTTL', KEYS[1])
+if ttl > 0 then
+  redis.call('PEXPIRE', KEYS[4], ttl)
+  redis.call('PEXPIRE', KEYS[5], ttl)
+end
 
 local result
 if ARGV[5] == '1' then

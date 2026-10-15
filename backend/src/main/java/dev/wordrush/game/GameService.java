@@ -183,6 +183,8 @@ public class GameService {
             return; // not counting down to this round any more
         }
         timers.schedule(new Timer(code, TimerType.ROUND_END, roundId.toString()), endsAt);
+        // start_round.lua kept the room alive; keep everyone's resume-after-refresh pointer alive with it.
+        room.players().forEach(player -> rooms.refreshCurrentRoom(player.userId(), code, roomTtl));
         log.info("Round started room={} round={}/{} roundId={}", code, roundNo, room.settings().totalRounds(), roundId);
         broadcaster.broadcast(code, new RoomEvent.RoundStarted(roundId, roundNo, room.settings().totalRounds(), endsAt));
     }

@@ -65,3 +65,5 @@ cd frontend && npm test && npm run typecheck   # reducer unit tests + TypeScript
 ## Deploy
 
 One Render Blueprint ([`render.yaml`](render.yaml)) creates the web service, Postgres and Key Value. Step-by-step: [docs/deploy-render.md](docs/deploy-render.md).
+
+To browse Postgres and Redis from your editor or terminal, see [docs/database.md](docs/database.md).

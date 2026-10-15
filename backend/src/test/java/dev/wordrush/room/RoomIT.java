@@ -5,9 +5,12 @@ import static org.assertj.core.api.InstanceOfAssertFactories.LIST;
 
 import dev.wordrush.IntegrationTest;
 import dev.wordrush.auth.AuthResponse;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -23,6 +26,9 @@ class RoomIT extends IntegrationTest {
 
     @Autowired
     StringRedisTemplate redis;
+
+    @Autowired
+    RoomRepository rooms;
 
     private RoomSnapshot createRoom(AuthResponse host, Map<String, Object> settings) {
         return http(host.accessToken()).post().uri("/api/v1/rooms").body(settings)
@@ -166,6 +172,49 @@ class RoomIT extends IntegrationTest {
                 .map(Object.class::cast)
                 .toList();
         assertThat(fields).containsExactlyInAnyOrder("totalRounds", "maxPlayers");
+    }
+
+    @Test
+    void anExpiredRoomIsGoneForEveryone() throws Exception {
+        AuthResponse host = signIn("host");
+        AuthResponse late = signIn("late");
+        String code = createRoom(host, Map.of()).code();
+
+        for (String key : RoomKeys.allForRoom(code)) {
+            redis.expire(key, Duration.ofMillis(1));
+        }
+        Thread.sleep(50);
+
+        assertThat(http(host.accessToken()).get().uri("/api/v1/me/room")
+                .retrieve().toBodilessEntity().getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(redis.hasKey(RoomKeys.userRoom(host.user().id()))).as("stale pointer cleaned up").isFalse();
+        assertThat(join(late, code).getBody()).containsEntry("code", "ROOM_NOT_FOUND");
+    }
+
+    /** Codes are random, so a new room can land on the code of one that expired. It must start clean. */
+    @Test
+    void aNewRoomDoesNotInheritKeysLeftByAnExpiredRoomWithTheSameCode() {
+        String code = "W7W7W7";
+        RoomKeys.allForRoom(code).forEach(redis::delete);
+        try {
+            redis.opsForHash().put(RoomKeys.guesses(code), "someone", "CRANE:BBBBB");
+            redis.opsForHash().put(RoomKeys.attempts(code), "someone", "3");
+            redis.opsForZSet().add(RoomKeys.leaderboard(code), "someone", 500);
+            redis.opsForSet().add(RoomKeys.usedAnswers(code), "CRANE");
+
+            UUID hostId = UUID.randomUUID();
+            Player hostPlayer = new Player(hostId, "fresh", false, true, 1);
+            Room room = new Room(code, RoomStatus.LOBBY, hostId, new RoomSettings(5, 90, 6), List.of(hostPlayer),
+                    Instant.now(), 0);
+            assertThat(rooms.create(room, Duration.ofMinutes(5))).isTrue();
+
+            assertThat(redis.hasKey(RoomKeys.guesses(code))).isFalse();
+            assertThat(redis.hasKey(RoomKeys.attempts(code))).isFalse();
+            assertThat(redis.hasKey(RoomKeys.leaderboard(code))).isFalse();
+            assertThat(redis.hasKey(RoomKeys.usedAnswers(code))).isFalse();
+        } finally {
+            RoomKeys.allForRoom(code).forEach(redis::delete);
+        }
     }
 
     @Test

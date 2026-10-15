@@ -64,7 +64,7 @@ public final class RoomKeys {
         return "wr:user:" + userId + ":room";
     }
 
-    /** Keys deleted when a room closes (idempotency keys simply expire). */
+    /** Keys deleted when a room closes or its code is reused (idempotency keys simply expire). */
     static List<String> allForRoom(String code) {
         return List.of(room(code), players(code), round(code), guesses(code), attempts(code),
                 leaderboard(code), usedAnswers(code));

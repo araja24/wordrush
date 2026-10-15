@@ -13,6 +13,7 @@ import dev.wordrush.auth.AuthResponse;
 import dev.wordrush.auth.AuthenticatedUser;
 import dev.wordrush.room.RoomKeys;
 import dev.wordrush.room.RoomSnapshot;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -250,6 +251,28 @@ class GameIT extends IntegrationTest {
 
         assertThat(payload(await(host.room(), ofType("ROUND_ENDED")))).containsEntry("reason", "ALL_FAILED");
         assertThat(await(host.results(), m -> true)).containsEntry("outcome", "ROUND_OVER");
+    }
+
+    /** Abandoned rooms must vanish on their own: no room key may be left without a TTL. */
+    @Test
+    void everyRoomKeyExpiresAndPlayingKeepsTheResumePointerAlive() throws Exception {
+        AuthResponse hostAuth = signIn("tidy");
+        String code = createRoom(hostAuth, Map.of());
+        Seat host = connect(hostAuth, code);
+        String pointer = RoomKeys.userRoom(host.id());
+        redis.expire(pointer, Duration.ofSeconds(30)); // as if they joined long ago
+
+        host.client().send("/app/rooms/" + code + "/start", Map.of());
+        Object roundId = payload(await(host.room(), ofType("ROUND_STARTED"))).get("roundId");
+        host.guess(code, roundId, wrongWord(answer(code)));
+        assertThat(await(host.results(), m -> true)).containsEntry("outcome", "WRONG");
+
+        for (String key : List.of(RoomKeys.room(code), RoomKeys.players(code), RoomKeys.round(code),
+                RoomKeys.guesses(code), RoomKeys.attempts(code), RoomKeys.leaderboard(code),
+                RoomKeys.usedAnswers(code))) {
+            assertThat(redis.getExpire(key)).as("TTL of %s", key).isPositive();
+        }
+        assertThat(redis.getExpire(pointer)).as("pointer refreshed when the round started").isGreaterThan(60);
     }
 
     @Test

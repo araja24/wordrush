@@ -59,7 +59,7 @@ public class RoomRepository {
                 "createdAt", String.valueOf(room.createdAt().toEpochMilli()),
                 "seq", String.valueOf(room.seq()),
                 "roundNo", "0"));
-        Long created = redis.execute(CREATE, membershipKeys(room.code()), args.toArray());
+        Long created = redis.execute(CREATE, RoomKeys.allForRoom(room.code()), args.toArray());
         return created != null && created == 1L;
     }
 
@@ -112,6 +112,13 @@ public class RoomRepository {
 
     void setCurrentRoom(UUID userId, String code, Duration ttl) {
         redis.opsForValue().set(RoomKeys.userRoom(userId), code, ttl);
+    }
+
+    /** Extends the pointer's TTL only if it still points at {@code code}. */
+    public void refreshCurrentRoom(UUID userId, String code, Duration ttl) {
+        if (code.equals(redis.opsForValue().get(RoomKeys.userRoom(userId)))) {
+            redis.expire(RoomKeys.userRoom(userId), ttl);
+        }
     }
 
     Optional<String> currentRoom(UUID userId) {

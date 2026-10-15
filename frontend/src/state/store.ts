@@ -67,6 +67,10 @@ interface AppState {
 let socket: RoomSocket | null = null;
 let toastId = 0;
 
+/** The server's answer when the room expired (2 h without activity) or we're no longer in it. */
+const ROOM_GONE = new Set(['ROOM_NOT_FOUND', 'NOT_A_MEMBER']);
+const ROOM_GONE_MESSAGE = 'That room has closed or expired. Start a new one or join another.';
+
 export const useApp = create<AppState>((set, get) => {
   const dispatch = (action: Action) => {
     const game = get().game;
@@ -86,7 +90,14 @@ export const useApp = create<AppState>((set, get) => {
         set({ lastResult: result });
         dispatch({ type: 'guessResult', result });
       },
-      onError: (error) => get().showToast(error.message),
+      onError: (error) => {
+        if (ROOM_GONE.has(error.code)) {
+          closeRoom();
+          get().showToast(ROOM_GONE_MESSAGE);
+        } else {
+          get().showToast(error.message);
+        }
+      },
       onKicked: () => {
         closeRoom();
         set({ removedFrom: room.code });
@@ -114,6 +125,9 @@ export const useApp = create<AppState>((set, get) => {
         saveAuth(null);
         set({ auth: null });
         get().showToast('Your session expired. Pick a nickname to play again.');
+      } else if (error instanceof ApiError && ROOM_GONE.has(error.code) && get().game) {
+        closeRoom();
+        get().showToast(ROOM_GONE_MESSAGE);
       } else {
         get().showToast(error instanceof Error ? error.message : 'Something went wrong.');
       }
