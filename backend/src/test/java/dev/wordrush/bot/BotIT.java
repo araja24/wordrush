@@ -7,14 +7,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.wordrush.IntegrationTest;
 import dev.wordrush.StompTestClient;
 import dev.wordrush.auth.AuthResponse;
+import dev.wordrush.room.RoomKeys;
 import dev.wordrush.room.RoomSnapshot;
+import dev.wordrush.user.UserRepository;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -22,6 +28,15 @@ class BotIT extends IntegrationTest {
 
     @Autowired
     BotService botService;
+
+    @Autowired
+    BotAccountCleaner botAccounts;
+
+    @Autowired
+    UserRepository users;
+
+    @Autowired
+    StringRedisTemplate redis;
 
     private String createRoom(AuthResponse host, Map<String, Object> settings) {
         return http(host.accessToken()).post().uri("/api/v1/rooms").body(settings)
@@ -131,5 +146,34 @@ class BotIT extends IntegrationTest {
         http(host.accessToken()).post().uri("/api/v1/rooms/{code}/leave", code).retrieve().toBodilessEntity();
         botService.dropBotsWithoutARoom();
         assertThat(botService.activeBots()).isEqualTo(before);
+    }
+
+    /** Bot accounts belong to one room: once it's gone (closed or expired), so is the account. */
+    @Test
+    void botAccountsAreDeletedOnceTheirRoomIsGone() {
+        AuthResponse host = signIn("host");
+        String code = createRoom(host, Map.of());
+        @SuppressWarnings("unchecked")
+        UUID botId = UUID.fromString(((List<Map<String, Object>>) addBot(host, code, "EASY").getBody().get("players"))
+                .stream().filter(p -> Boolean.TRUE.equals(p.get("bot")))
+                .map(p -> (String) p.get("userId")).findFirst().orElseThrow());
+
+        // A human joining keeps every seat's pointer alive, so a long lobby can't orphan the bot.
+        redis.expire(RoomKeys.userRoom(botId), Duration.ofSeconds(30));
+        http(signIn("friend").accessToken()).post().uri("/api/v1/rooms/{code}/join", code)
+                .retrieve().toBodilessEntity();
+        assertThat(redis.getExpire(RoomKeys.userRoom(botId))).isGreaterThan(60);
+
+        Instant everyoneIsOldEnough = Instant.now().plusSeconds(1);
+        botAccounts.deleteBotsWithoutARoom(everyoneIsOldEnough);
+        assertThat(users.existsById(botId)).as("still seated: kept").isTrue();
+
+        for (String key : List.of(RoomKeys.room(code), RoomKeys.players(code))) {
+            redis.delete(key); // the room expires
+        }
+        botService.dropBotsWithoutARoom(); // stop the in-app bot now, not on the 30 s sweep mid-way through another test
+        botAccounts.deleteBotsWithoutARoom(everyoneIsOldEnough);
+        assertThat(users.existsById(botId)).as("room gone: deleted").isFalse();
+        assertThat(users.existsById(host.user().id())).as("humans are never touched").isTrue();
     }
 }

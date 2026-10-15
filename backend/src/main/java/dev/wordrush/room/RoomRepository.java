@@ -121,7 +121,7 @@ public class RoomRepository {
         }
     }
 
-    Optional<String> currentRoom(UUID userId) {
+    public Optional<String> currentRoom(UUID userId) {
         return Optional.ofNullable(redis.opsForValue().get(RoomKeys.userRoom(userId)));
     }
 

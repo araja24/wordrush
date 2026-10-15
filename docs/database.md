@@ -4,7 +4,7 @@ WordRush has two stores, and neither is SQLite, so a SQLite viewer can't open th
 
 | Store | Holds | Lifetime |
 |---|---|---|
-| **Postgres** | `users` (guests and bots), plus the `games`, `rounds`, `guesses` history tables (empty until Stage 6) | permanent |
+| **Postgres** | `users` (guests and bots; a bot's row is deleted within about 6 minutes of its room closing or expiring), plus the `games`, `rounds`, `guesses` history tables (empty until Stage 6) | permanent |
 | **Redis** | live rooms, rounds, scores, timers. Key layout in [`RoomKeys.java`](../backend/src/main/java/dev/wordrush/room/RoomKeys.java) | every room key expires 2 h after the last join or round start |
 
 ## In Cursor / VS Code

@@ -72,7 +72,10 @@ public class RoomService {
             case ALREADY_MEMBER -> log.debug("Player rejoined room={} user={}", code, caller.id());
         }
         rooms.setCurrentRoom(caller.id(), code, ttl);
-        return get(caller, code);
+        RoomSnapshot snapshot = get(caller, code);
+        // join_room.lua just extended the room's TTL; extend every seat's pointer with it.
+        snapshot.players().forEach(player -> rooms.refreshCurrentRoom(player.userId(), code, ttl));
+        return snapshot;
     }
 
     public void leave(AuthenticatedUser caller, String rawCode) {
