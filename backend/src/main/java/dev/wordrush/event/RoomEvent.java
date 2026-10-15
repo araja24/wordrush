@@ -38,6 +38,7 @@ public sealed interface RoomEvent {
             UUID winnerId,
             Integer winnerAttempts,
             int points,
+            Long solveMillis,
             long nextPhaseAt) implements RoomEvent {
     }
 

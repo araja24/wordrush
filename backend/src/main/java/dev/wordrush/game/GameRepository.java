@@ -34,10 +34,17 @@ class GameRepository {
             UUID roundId,
             int roundNo,
             String answer,
+            long startedAt,
             long endsAt,
             UUID winnerId,
             Integer winnerAttempts,
+            Long winnerAt,
             RoundEndReason endReason) {
+
+        /** How long the winner took, from round start to their winning guess; null if nobody solved it. */
+        Long solveMillis() {
+            return winnerAt == null ? null : winnerAt - startedAt;
+        }
     }
 
     record GuessEntry(String word, String feedback) {
@@ -127,14 +134,17 @@ class GameRepository {
         }
         String winnerId = fields.get("winnerId");
         String winnerAttempts = fields.get("winnerAttempts");
+        String winnerAt = fields.get("winnerAt");
         String endReason = fields.get("endReason");
         return Optional.of(new RoundState(
                 UUID.fromString(fields.get("roundId")),
                 parseInt(fields.get("roundNo")),
                 fields.get("answer"),
+                parseLong(fields.get("startedAt")),
                 parseLong(fields.get("endsAt")),
                 winnerId == null ? null : UUID.fromString(winnerId),
                 winnerAttempts == null ? null : Integer.valueOf(winnerAttempts),
+                winnerAt == null ? null : Long.valueOf(winnerAt),
                 endReason == null ? null : RoundEndReason.valueOf(endReason)));
     }
 

@@ -61,6 +61,8 @@ export interface RoundResult {
   reason: RoundEndReason;
   winnerId: string | null;
   winnerAttempts: number | null;
+  /** Round start to the winning guess, in ms; null if nobody solved it. */
+  solveMillis: number | null;
 }
 
 export interface GameSnapshot {
@@ -106,6 +108,7 @@ export type RoomMessage =
       winnerId: string | null;
       winnerAttempts: number | null;
       points: number;
+      solveMillis: number | null;
       nextPhaseAt: number;
     }>
   | Envelope<'LEADERBOARD', { standings: Standing[] }>

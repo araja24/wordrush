@@ -32,6 +32,7 @@ public record GameSnapshot(
     public record GuessView(String word, String feedback) {
     }
 
-    public record Result(String answer, RoundEndReason reason, UUID winnerId, Integer winnerAttempts) {
+    public record Result(String answer, RoundEndReason reason, UUID winnerId, Integer winnerAttempts,
+                         Long solveMillis) {
     }
 }

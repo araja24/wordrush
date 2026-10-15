@@ -137,7 +137,8 @@ public class GameService {
         if (commit.roundEnded()) {
             boolean won = outcome == GuessOutcome.WON;
             announceRoundEnd(code, round, won ? RoundEndReason.SOLVED : RoundEndReason.ALL_FAILED,
-                    won ? caller.id() : null, won ? commit.attempt() : null, commit.points(), resultsEndsAt);
+                    won ? caller.id() : null, won ? commit.attempt() : null, commit.points(),
+                    won ? now - round.startedAt() : null, resultsEndsAt);
         }
         return result;
     }
@@ -194,7 +195,7 @@ public class GameService {
         }
         long resultsEndsAt = clock.millis() + config.resultsPause().toMillis();
         if (games.endRoundOnTimeout(code, roundId, resultsEndsAt)) {
-            announceRoundEnd(code, round, RoundEndReason.TIMEOUT, null, null, 0, resultsEndsAt);
+            announceRoundEnd(code, round, RoundEndReason.TIMEOUT, null, null, 0, null, resultsEndsAt);
         }
     }
 
@@ -222,13 +223,13 @@ public class GameService {
     }
 
     private void announceRoundEnd(String code, RoundState round, RoundEndReason reason, UUID winnerId,
-                                  Integer winnerAttempts, int points, long resultsEndsAt) {
+                                  Integer winnerAttempts, int points, Long solveMillis, long resultsEndsAt) {
         // Schedule before broadcasting so the game keeps moving even if a broadcast fails.
         timers.schedule(new Timer(code, TimerType.RESULTS_END, String.valueOf(round.roundNo())), resultsEndsAt);
         log.info("Round ended room={} round={} reason={} winner={} attempts={}",
                 code, round.roundNo(), reason, winnerId, winnerAttempts);
         broadcaster.broadcast(code, new RoomEvent.RoundEnded(round.roundId(), round.roundNo(), round.answer(),
-                reason, winnerId, winnerAttempts, points, resultsEndsAt));
+                reason, winnerId, winnerAttempts, points, solveMillis, resultsEndsAt));
         rooms.find(code).ifPresent(room ->
                 broadcaster.broadcast(code, new RoomEvent.LeaderboardUpdated(standings(code, room))));
     }
@@ -261,7 +262,8 @@ public class GameService {
         });
         GameSnapshot.Result result = round.endReason() == null
                 ? null // the answer stays secret until the round is over
-                : new GameSnapshot.Result(round.answer(), round.endReason(), round.winnerId(), round.winnerAttempts());
+                : new GameSnapshot.Result(round.answer(), round.endReason(), round.winnerId(), round.winnerAttempts(),
+                        round.solveMillis());
         return new GameSnapshot.CurrentRound(round.roundId(), round.roundNo(), round.endsAt(), mine, opponents, result);
     }
 

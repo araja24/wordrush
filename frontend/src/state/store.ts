@@ -40,10 +40,14 @@ interface AppState {
   connected: boolean;
   resuming: boolean;
   toast: Toast | null;
+  /** Set when the host removed us; shows the "removed" screen until dismissed. */
+  removedFrom: string | null;
+  helpOpen: boolean;
   /** The latest private guess result, so the board can react (shake, clear input). */
   lastResult: GuessResult | null;
 
-  signIn(nickname: string): Promise<void>;
+  /** Resolves true once signed in. */
+  signIn(nickname: string): Promise<boolean>;
   signOut(): Promise<void>;
   resume(): Promise<void>;
   createRoom(settings: Partial<RoomSettings>): Promise<void>;
@@ -55,6 +59,9 @@ interface AppState {
   guess(word: string): void;
   playAgain(): void;
   showToast(text: string): void;
+  clearToast(): void;
+  dismissRemoved(): void;
+  setHelpOpen(open: boolean): void;
 }
 
 let socket: RoomSocket | null = null;
@@ -82,7 +89,7 @@ export const useApp = create<AppState>((set, get) => {
       onError: (error) => get().showToast(error.message),
       onKicked: () => {
         closeRoom();
-        get().showToast('The host removed you from the room.');
+        set({ removedFrom: room.code });
       },
       onConnectionChange: (connected) => set({ connected }),
     });
@@ -119,6 +126,8 @@ export const useApp = create<AppState>((set, get) => {
     connected: false,
     resuming: false,
     toast: null,
+    removedFrom: null,
+    helpOpen: false,
     lastResult: null,
 
     async signIn(nickname) {
@@ -126,8 +135,10 @@ export const useApp = create<AppState>((set, get) => {
         const auth = await api.signIn(nickname);
         saveAuth(auth);
         set({ auth });
+        return true;
       } catch (error) {
         get().showToast(error instanceof Error ? error.message : 'Could not sign in.');
+        return false;
       }
     },
 
@@ -179,6 +190,12 @@ export const useApp = create<AppState>((set, get) => {
     },
 
     playAgain: () => socket?.playAgain(),
+
+    clearToast: () => set({ toast: null }),
+
+    dismissRemoved: () => set({ removedFrom: null }),
+
+    setHelpOpen: (open) => set({ helpOpen: open }),
 
     showToast(text) {
       const toast = { id: ++toastId, text };

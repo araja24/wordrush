@@ -124,6 +124,7 @@ class GameIT extends IntegrationTest {
         Map<String, Object> ended = payload(await(guest.room(), ofType("ROUND_ENDED")));
         assertThat(ended).containsEntry("answer", answer).containsEntry("reason", "SOLVED")
                 .containsEntry("winnerId", host.id().toString());
+        assertThat(((Number) ended.get("solveMillis")).longValue()).as("time from round start to the win").isPositive();
         assertThat(payload(await(guest.room(), ofType("LEADERBOARD"))).get("standings")).asInstanceOf(LIST)
                 .first().asInstanceOf(MAP).containsEntry("userId", host.id().toString()).containsEntry("rank", 1);
 
@@ -228,7 +229,7 @@ class GameIT extends IntegrationTest {
         host.client().send("/app/rooms/" + code + "/start", Map.of());
 
         Map<String, Object> ended = payload(await(host.room(), ofType("ROUND_ENDED")));
-        assertThat(ended).containsEntry("reason", "TIMEOUT").containsEntry("winnerId", null)
+        assertThat(ended).containsEntry("reason", "TIMEOUT").containsEntry("winnerId", null).containsEntry("solveMillis", null)
                 .containsEntry("answer", answer(code));
     }
 

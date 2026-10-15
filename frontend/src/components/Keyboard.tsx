@@ -1,4 +1,7 @@
+import { BackspaceIcon } from './Icons';
+
 const ROWS = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'];
+const STATE_NAMES = { G: 'correct spot', Y: 'in the word', B: 'not in the word' } as const;
 
 interface Props {
   states: Record<string, 'G' | 'Y' | 'B'>;
@@ -19,15 +22,20 @@ export function Keyboard({ states, disabled, onLetter, onEnter, onBackspace }: P
               Enter
             </button>
           )}
-          {[...row].map((letter) => (
-            <button key={letter} type="button" className={`key${states[letter] ? ` key--${states[letter]}` : ''}`}
-                    disabled={disabled} onClick={() => onLetter(letter)}>
-              {letter}
-            </button>
-          ))}
+          {[...row].map((letter) => {
+            const state = states[letter];
+            return (
+              <button key={letter} type="button" className={`key${state ? ` key--${state}` : ''}`} disabled={disabled}
+                      aria-label={`${letter}, ${state ? STATE_NAMES[state] : 'not tried'}`}
+                      onClick={() => onLetter(letter)}>
+                {letter}
+              </button>
+            );
+          })}
           {r === 2 && (
-            <button type="button" className="key key--wide" disabled={disabled} onClick={onBackspace} aria-label="Delete letter">
-              ⌫
+            <button type="button" className="key key--wide" disabled={disabled} onClick={onBackspace}
+                    aria-label="Delete letter">
+              <BackspaceIcon />
             </button>
           )}
         </div>

@@ -1,110 +1,153 @@
-import { useState, type FormEvent } from 'react';
-import { LetterTiles } from '../components/LetterTiles';
+import { useRef, useState, type ClipboardEvent, type FormEvent, type KeyboardEvent } from 'react';
+import { HowTo } from '../components/HowTo';
+import { Logo } from '../components/Logo';
 import { useApp } from '../state/store';
 
-function inviteCode(): string {
-  return new URLSearchParams(window.location.search).get('room')?.toUpperCase() ?? '';
+const CODE_LENGTH = 6;
+const SECOND_OPTIONS = [60, 90, 120, 180];
+const NICKNAME = /^[A-Za-z0-9_]{2,16}$/;
+
+function inviteCode(): string[] {
+  const code = (new URLSearchParams(window.location.search).get('room') ?? '').toUpperCase().slice(0, CODE_LENGTH);
+  return Array.from({ length: CODE_LENGTH }, (_, i) => code[i] ?? '');
 }
 
 export function Home() {
-  const auth = useApp((s) => s.auth);
+  const { auth, signIn, joinRoom, createRoom } = useApp();
+  const [nickname, setNickname] = useState(auth?.user.nickname ?? '');
+  const [mode, setMode] = useState<'join' | 'create'>('join');
+  const [code, setCode] = useState<string[]>(inviteCode);
+  const [rounds, setRounds] = useState(5);
+  const [seconds, setSeconds] = useState(90);
+  const [maxPlayers, setMaxPlayers] = useState(8);
+  const [busy, setBusy] = useState(false);
+  const boxes = useRef<(HTMLInputElement | null)[]>([]);
+
+  const nicknameOk = NICKNAME.test(nickname);
+  const codeText = code.join('');
+  const canJoin = nicknameOk && codeText.length === CODE_LENGTH;
+
+  /** Sign in (or re-sign in under a new nickname) only when we have to, then do the action. */
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!nicknameOk || (mode === 'join' && !canJoin) || busy) return;
+    setBusy(true);
+    const signedIn = auth?.user.nickname === nickname || (await signIn(nickname));
+    if (signedIn) {
+      if (mode === 'join') await joinRoom(codeText);
+      else await createRoom({ totalRounds: rounds, roundSeconds: seconds, maxPlayers });
+    }
+    setBusy(false);
+  }
+
+  function setBox(index: number, value: string) {
+    const letter = value.replace(/[^A-Za-z0-9]/g, '').slice(-1).toUpperCase();
+    setCode((current) => current.map((c, i) => (i === index ? letter : c)));
+    if (letter && index < CODE_LENGTH - 1) boxes.current[index + 1]?.focus();
+  }
+
+  function onBoxKey(index: number, event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Backspace' && !code[index] && index > 0) boxes.current[index - 1]?.focus();
+  }
+
+  function onBoxPaste(event: ClipboardEvent<HTMLInputElement>) {
+    const pasted = event.clipboardData.getData('text').replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, CODE_LENGTH);
+    if (!pasted) return;
+    event.preventDefault();
+    setCode(Array.from({ length: CODE_LENGTH }, (_, i) => pasted[i] ?? ''));
+    boxes.current[Math.min(pasted.length, CODE_LENGTH - 1)]?.focus();
+  }
+
   return (
     <main className="home">
-      <header className="home__intro">
-        <h1>
-          <LetterTiles text="WORDRUSH" label="WordRush" size="lg" />
-        </h1>
+      <div className="home__inner">
+        <Logo />
         <p className="home__pitch">Same five-letter word for everyone. First to solve it takes the round.</p>
-      </header>
-      {auth ? <RoomChooser /> : <NicknameForm />}
+
+        <div className="home__columns">
+          <form className="card home__card" onSubmit={submit}>
+            <div className="field">
+              <label htmlFor="nick" className="field-label">Your nickname</label>
+              <input id="nick" className="text-input" value={nickname} maxLength={16} autoComplete="nickname"
+                     placeholder="2–16 letters, numbers or _" onChange={(e) => setNickname(e.target.value)} />
+            </div>
+
+            <div className="segmented" role="group" aria-label="Join or start a room">
+              <button type="button" aria-pressed={mode === 'join'} onClick={() => setMode('join')}>Join room</button>
+              <button type="button" aria-pressed={mode === 'create'} onClick={() => setMode('create')}>New room</button>
+            </div>
+
+            {mode === 'join' ? (
+              <div className="home__panel">
+                <fieldset className="code-boxes">
+                  <legend className="field-label">Room code</legend>
+                  <div className="code-boxes__row">
+                    {code.map((letter, i) => (
+                      <input key={i} ref={(el) => { boxes.current[i] = el; }} value={letter} maxLength={2}
+                             aria-label={`Room code character ${i + 1}`} autoComplete="off" spellCheck={false}
+                             onChange={(e) => setBox(i, e.target.value)} onKeyDown={(e) => onBoxKey(i, e)}
+                             onPaste={onBoxPaste} />
+                    ))}
+                  </div>
+                </fieldset>
+                <button type="submit" className="btn btn--primary" disabled={!canJoin || busy}>
+                  Join<span aria-hidden="true" className="kbd-hint">Enter</span>
+                </button>
+              </div>
+            ) : (
+              <div className="home__panel" style={{ gap: 16 }}>
+                <div className="setting-row">
+                  <span id="rounds-label" className="setting-label">Rounds</span>
+                  <Stepper labelledBy="rounds-label" value={rounds} min={1} max={10} onChange={setRounds}
+                           lessLabel="Fewer rounds" moreLabel="More rounds" />
+                </div>
+                <div className="field">
+                  <span id="seconds-label" className="setting-label">Seconds per round</span>
+                  <div className="segmented segmented--light" role="group" aria-labelledby="seconds-label">
+                    {SECOND_OPTIONS.map((option) => (
+                      <button key={option} type="button" aria-pressed={seconds === option} onClick={() => setSeconds(option)}>
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="setting-row">
+                  <span id="max-label" className="setting-label">Max players <small>· bots count</small></span>
+                  <Stepper labelledBy="max-label" value={maxPlayers} min={2} max={8} onChange={setMaxPlayers}
+                           lessLabel="Fewer players" moreLabel="More players" />
+                </div>
+                <button type="submit" className="btn btn--primary" style={{ marginTop: 4 }} disabled={!nicknameOk || busy}>
+                  Create room<span aria-hidden="true" className="kbd-hint">Enter</span>
+                </button>
+              </div>
+            )}
+          </form>
+
+          <div className="home__help">
+            <HowTo />
+          </div>
+        </div>
+      </div>
     </main>
   );
 }
 
-function NicknameForm() {
-  const signIn = useApp((s) => s.signIn);
-  const [nickname, setNickname] = useState('');
-  const [busy, setBusy] = useState(false);
-  const valid = /^[A-Za-z0-9_]{2,16}$/.test(nickname);
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    if (!valid) return;
-    setBusy(true);
-    await signIn(nickname);
-    setBusy(false);
-  }
-
-  return (
-    <form className="panel" onSubmit={submit}>
-      <label className="field">
-        <span>Your nickname</span>
-        <input value={nickname} onChange={(e) => setNickname(e.target.value)} autoFocus maxLength={16}
-               autoComplete="nickname" placeholder="e.g. alex" aria-describedby="nickname-hint" />
-      </label>
-      <p id="nickname-hint" className="hint">2–16 letters, numbers or underscores.</p>
-      <button className="button button--primary" disabled={!valid || busy}>
-        Play
-      </button>
-    </form>
-  );
+interface StepperProps {
+  labelledBy: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange(value: number): void;
+  lessLabel: string;
+  moreLabel: string;
 }
 
-function RoomChooser() {
-  const { auth, createRoom, joinRoom, signOut } = useApp();
-  const [code, setCode] = useState(inviteCode);
-  const [rounds, setRounds] = useState(5);
-  const [seconds, setSeconds] = useState(90);
-  const [maxPlayers, setMaxPlayers] = useState(6);
-  const [busy, setBusy] = useState(false);
-
-  async function run(action: () => Promise<void>) {
-    setBusy(true);
-    await action();
-    setBusy(false);
-  }
-
+function Stepper({ labelledBy, value, min, max, onChange, lessLabel, moreLabel }: StepperProps) {
   return (
-    <div className="chooser">
-      <form className="panel" onSubmit={(e) => { e.preventDefault(); void run(() => joinRoom(code)); }}>
-        <h2>Join a room</h2>
-        <label className="field">
-          <span>Room code</span>
-          <input className="input--code" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())}
-                 maxLength={6} autoComplete="off" spellCheck={false} placeholder="ABC234" />
-        </label>
-        <button className="button button--primary" disabled={code.length !== 6 || busy}>
-          Join room
-        </button>
-      </form>
-
-      <form className="panel" onSubmit={(e) => { e.preventDefault(); void run(() => createRoom({ totalRounds: rounds, roundSeconds: seconds, maxPlayers })); }}>
-        <h2>Start a room</h2>
-        <div className="settings">
-          <label className="field">
-            <span>Rounds</span>
-            <input type="number" min={1} max={10} value={rounds} onChange={(e) => setRounds(Number(e.target.value))} />
-          </label>
-          <label className="field">
-            <span>Seconds per round</span>
-            <input type="number" min={30} max={180} step={15} value={seconds} onChange={(e) => setSeconds(Number(e.target.value))} />
-          </label>
-          <label className="field">
-            <span>Max players</span>
-            <input type="number" min={2} max={8} value={maxPlayers} onChange={(e) => setMaxPlayers(Number(e.target.value))} />
-          </label>
-        </div>
-        <button className="button" disabled={busy}>
-          Create room
-        </button>
-      </form>
-
-      <p className="signed-in">
-        Playing as <strong>{auth?.user.nickname}</strong>.{' '}
-        <button type="button" className="link" onClick={() => void signOut()}>
-          Change nickname
-        </button>
-      </p>
+    <div className="stepper" role="group" aria-labelledby={labelledBy}>
+      <button type="button" aria-label={lessLabel} disabled={value <= min} onClick={() => onChange(value - 1)}>−</button>
+      <output aria-live="polite">{value}</output>
+      <button type="button" aria-label={moreLabel} disabled={value >= max} onClick={() => onChange(value + 1)}>+</button>
     </div>
   );
 }

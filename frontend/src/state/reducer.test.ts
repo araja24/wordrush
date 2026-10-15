@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GameSnapshot, RoomMessage, RoomSnapshot } from '../api/types';
-import { initialState, letterStates, reduce, type GameState } from './reducer';
+import { bestGreens, botName, initialState, letterStates, reduce, type GameState } from './reducer';
 
 const ME = 'me';
 const OTHER = 'other';
@@ -33,14 +33,15 @@ describe('reduce', () => {
       { type: 'guessResult', result: { guessId: 'g1', roundId: 'r1', word: 'CRANE', feedback: 'BYBBG', attempt: 1, outcome: 'WRONG', points: 0, msBehind: 0 } },
       msg('PLAYER_PROGRESS', 4, { userId: ME, attempt: 1, feedback: 'BYBBG' }),
       msg('PLAYER_PROGRESS', 5, { userId: OTHER, attempt: 1, feedback: 'GGBBB' }),
-      msg('ROUND_ENDED', 6, { roundId: 'r1', roundNo: 1, answer: 'GLOBE', reason: 'SOLVED', winnerId: OTHER, winnerAttempts: 2, points: 180, nextPhaseAt: 100_000 }),
+      msg('ROUND_ENDED', 6, { roundId: 'r1', roundNo: 1, answer: 'GLOBE', reason: 'SOLVED', winnerId: OTHER, winnerAttempts: 2, points: 180, solveMillis: 41_250, nextPhaseAt: 100_000 }),
     );
 
     expect(state.status).toBe('ROUND_RESULTS');
     expect(state.room?.players.map((p) => p.userId)).toEqual([ME, OTHER]);
     expect(state.round?.myGuesses).toEqual([{ word: 'CRANE', feedback: 'BYBBG' }]);
     expect(state.round?.opponents).toEqual({ [OTHER]: ['GGBBB'] }); // own progress not duplicated
-    expect(state.round?.result).toMatchObject({ answer: 'GLOBE', winnerId: OTHER });
+    expect(state.round?.result).toMatchObject({ answer: 'GLOBE', winnerId: OTHER, solveMillis: 41_250 });
+    expect(state.history).toEqual([{ roundNo: 1, answer: 'GLOBE', reason: 'SOLVED', winnerId: OTHER }]);
     expect(state.phaseEndsAt).toBe(100_000);
     expect(state.needsResync).toBe(false);
   });
@@ -88,5 +89,28 @@ describe('letterStates', () => {
       { word: 'CRANE', feedback: 'BYBBB' },
       { word: 'ROUND', feedback: 'GBBBB' },
     ])).toMatchObject({ C: 'B', R: 'G', A: 'B', O: 'B' });
+  });
+});
+
+describe('helpers', () => {
+  it('counts the most greens in any row', () => {
+    expect(bestGreens(['GBBBB', 'GGGYB', 'BBBBB'])).toBe(3);
+    expect(bestGreens([])).toBe(0);
+  });
+
+  it('splits bot nicknames', () => {
+    expect(botName('Ada (hard)')).toEqual({ name: 'Ada', level: 'hard' });
+    expect(botName('maya')).toEqual({ name: 'maya', level: null });
+  });
+
+  it('starts a fresh word history with each game', () => {
+    const state = play(
+      initialState(ME, room),
+      msg('COUNTDOWN', 1, { roundNo: 1, totalRounds: 2, startsAt: 1 }),
+      msg('ROUND_STARTED', 2, { roundId: 'r1', roundNo: 1, totalRounds: 2, endsAt: 9 }),
+      msg('ROUND_ENDED', 3, { roundId: 'r1', roundNo: 1, answer: 'PLANT', reason: 'TIMEOUT', winnerId: null, winnerAttempts: null, points: 0, solveMillis: null, nextPhaseAt: 9 }),
+      msg('COUNTDOWN', 4, { roundNo: 1, totalRounds: 2, startsAt: 1 }),
+    );
+    expect(state.history).toEqual([]);
   });
 });

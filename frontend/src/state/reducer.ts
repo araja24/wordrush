@@ -5,6 +5,7 @@ import type {
   RoomMessage,
   RoomSnapshot,
   RoomStatus,
+  RoundEndReason,
   RoundResult,
   Standing,
 } from '../api/types';
@@ -19,6 +20,14 @@ export interface Round {
   result: RoundResult | null;
 }
 
+/** One finished round, for the "words this game" list on the final screen. */
+export interface RoundRecord {
+  roundNo: number;
+  answer: string;
+  reason: RoundEndReason;
+  winnerId: string | null;
+}
+
 export interface GameState {
   me: string;
   room: RoomSnapshot | null;
@@ -26,8 +35,12 @@ export interface GameState {
   roundNo: number;
   /** When the current countdown / round / results pause ends, in server time. */
   phaseEndsAt: number;
+  /** When the current phase began, in server time (drives the draining progress bars). */
+  phaseStartedAt: number;
   round: Round | null;
   leaderboard: Standing[];
+  /** Rounds finished so far this game. Kept in memory only, so a refresh starts it afresh. */
+  history: RoundRecord[];
   /** Last applied room message sequence number. */
   seq: number;
   /** serverTime - local time; add to Date.now() to get server time. */
@@ -48,8 +61,10 @@ export function initialState(me: string, room: RoomSnapshot | null = null): Game
     status: room?.status ?? 'LOBBY',
     roundNo: 0,
     phaseEndsAt: 0,
+    phaseStartedAt: 0,
     round: null,
     leaderboard: [],
+    history: [],
     seq: room?.seq ?? 0,
     clockOffset: 0,
     needsResync: false,
@@ -59,7 +74,7 @@ export function initialState(me: string, room: RoomSnapshot | null = null): Game
 export function reduce(state: GameState, action: Action): GameState {
   switch (action.type) {
     case 'snapshot':
-      return fromSnapshot(state.me, action.snapshot, action.receivedAt);
+      return fromSnapshot(state, action.snapshot, action.receivedAt);
     case 'message':
       return applyMessage(state, action.message, action.receivedAt);
     case 'guessResult':
@@ -67,13 +82,15 @@ export function reduce(state: GameState, action: Action): GameState {
   }
 }
 
-function fromSnapshot(me: string, s: GameSnapshot, receivedAt: number): GameState {
+function fromSnapshot(previous: GameState, s: GameSnapshot, receivedAt: number): GameState {
+  const sameRoom = previous.room?.code === s.room.code;
   return {
-    me,
+    me: previous.me,
     room: s.room,
     status: s.room.status,
     roundNo: s.roundNo,
     phaseEndsAt: s.phaseEndsAt,
+    phaseStartedAt: sameRoom && previous.phaseStartedAt ? previous.phaseStartedAt : s.serverTime,
     round: s.round && {
       roundId: s.round.roundId,
       roundNo: s.round.roundNo,
@@ -83,6 +100,7 @@ function fromSnapshot(me: string, s: GameSnapshot, receivedAt: number): GameStat
       result: s.round.result,
     },
     leaderboard: s.leaderboard,
+    history: sameRoom ? previous.history : [],
     seq: s.room.seq,
     clockOffset: s.serverTime - receivedAt,
     needsResync: false,
@@ -116,12 +134,18 @@ function applyMessage(state: GameState, message: RoomMessage, receivedAt: number
       const players = next.room.players.map((p) => ({ ...p, host: p.userId === hostId }));
       return { ...next, room: { ...next.room, hostId, players } };
     }
-    case 'COUNTDOWN':
-      return withStatus({ ...next, roundNo: message.payload.roundNo, phaseEndsAt: message.payload.startsAt, round: null }, 'COUNTDOWN');
+    case 'COUNTDOWN': {
+      const { roundNo, startsAt } = message.payload;
+      const history = roundNo === 1 ? [] : next.history; // round 1 means a new game
+      return withStatus(
+        { ...next, roundNo, phaseEndsAt: startsAt, phaseStartedAt: message.serverTime, round: null, history },
+        'COUNTDOWN',
+      );
+    }
     case 'ROUND_STARTED': {
       const { roundId, roundNo, endsAt } = message.payload;
       const round: Round = { roundId, roundNo, endsAt, myGuesses: [], opponents: {}, result: null };
-      return withStatus({ ...next, roundNo, phaseEndsAt: endsAt, round }, 'IN_ROUND');
+      return withStatus({ ...next, roundNo, phaseEndsAt: endsAt, phaseStartedAt: message.serverTime, round }, 'IN_ROUND');
     }
     case 'PLAYER_PROGRESS': {
       const { userId, attempt, feedback } = message.payload;
@@ -131,16 +155,22 @@ function applyMessage(state: GameState, message: RoomMessage, receivedAt: number
       return { ...next, round: { ...next.round, opponents: { ...next.round.opponents, [userId]: [...rows, feedback] } } };
     }
     case 'ROUND_ENDED': {
-      const { answer, reason, winnerId, winnerAttempts, nextPhaseAt } = message.payload;
-      const round = next.round && { ...next.round, result: { answer, reason, winnerId, winnerAttempts } };
-      return withStatus({ ...next, round, phaseEndsAt: nextPhaseAt }, 'ROUND_RESULTS');
+      const { roundNo, answer, reason, winnerId, winnerAttempts, solveMillis, nextPhaseAt } = message.payload;
+      const round = next.round && { ...next.round, result: { answer, reason, winnerId, winnerAttempts, solveMillis } };
+      const history = next.history.some((r) => r.roundNo === roundNo)
+        ? next.history
+        : [...next.history, { roundNo, answer, reason, winnerId }];
+      return withStatus(
+        { ...next, round, history, phaseEndsAt: nextPhaseAt, phaseStartedAt: message.serverTime },
+        'ROUND_RESULTS',
+      );
     }
     case 'LEADERBOARD':
       return { ...next, leaderboard: message.payload.standings };
     case 'GAME_OVER':
       return withStatus({ ...next, leaderboard: message.payload.standings, phaseEndsAt: 0 }, 'GAME_OVER');
     case 'RETURNED_TO_LOBBY':
-      return withStatus({ ...next, round: null, roundNo: 0, phaseEndsAt: 0 }, 'LOBBY');
+      return withStatus({ ...next, round: null, roundNo: 0, phaseEndsAt: 0, history: [] }, 'LOBBY');
   }
 }
 
@@ -169,4 +199,15 @@ export function letterStates(guesses: GuessView[]): Record<string, 'G' | 'Y' | '
     });
   }
   return states;
+}
+
+/** Most greens in any one row: how close a player got. */
+export function bestGreens(rows: string[]): number {
+  return rows.reduce((best, row) => Math.max(best, [...row].filter((t) => t === 'G').length), 0);
+}
+
+/** Bots are named like "Ada (hard)": split into the display name and the difficulty. */
+export function botName(nickname: string): { name: string; level: string | null } {
+  const match = /^(.*) \((easy|medium|hard)\)$/.exec(nickname);
+  return match ? { name: match[1], level: match[2] } : { name: nickname, level: null };
 }
