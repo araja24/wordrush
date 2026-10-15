@@ -13,6 +13,8 @@ FROM eclipse-temurin:21-jdk AS build
 WORKDIR /workspace
 COPY gradlew settings.gradle.kts build.gradle.kts ./
 COPY gradle gradle
+# Windows checkouts lose the executable bit; never depend on it.
+RUN chmod +x gradlew
 COPY game-core/build.gradle.kts game-core/
 COPY backend/build.gradle.kts backend/
 COPY bot/build.gradle.kts bot/
